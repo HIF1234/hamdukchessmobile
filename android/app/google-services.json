@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "281734921146",
+    "project_id": "hamduk-chess-509517",
+    "storage_bucket": "hamduk-chess-509517.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:281734921146:android:7f92ac4cf0bd23db9c7b83",
+        "android_client_info": {
+          "package_name": "ng.com.hamduk.chess"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "281734921146-7gnloii2uq4ehcigocggmhdlc6pksdvk.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDLuOwHTy--dmnEvLcsiS9hv3jDv9WcVyc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "281734921146-7gnloii2uq4ehcigocggmhdlc6pksdvk.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

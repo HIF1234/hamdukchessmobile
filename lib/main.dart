@@ -1,8 +1,16 @@
+import 'dart:async';
+import 'dart:ui';
+
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'auth/sign_in_screen.dart';
 import 'core/app_config.dart';
+import 'core/telemetry.dart';
+import 'firebase_options.dart';
 import 'home_shell.dart';
 
 const brandGreen = Color(0xFF22A05A);
@@ -10,9 +18,22 @@ const brandGold = Color(0xFFF5B82E);
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Firebase reads its settings from the app itself, so this works offline too.
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  // Crash reports only from real installs; debug builds just print.
+  await FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(!kDebugMode);
+  FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
+  PlatformDispatcher.instance.onError = (error, stack) {
+    FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+    return true;
+  };
+
   final config = await AppConfig.load();
   if (config != null) {
     await Supabase.initialize(url: config.supabaseUrl, publishableKey: config.supabaseAnonKey);
+    final auth = Supabase.instance.client.auth;
+    unawaited(Telemetry.setUser(auth.currentUser?.id));
+    auth.onAuthStateChange.listen((s) => Telemetry.setUser(s.session?.user.id));
   }
   runApp(HamdukChessApp(config: config));
 }

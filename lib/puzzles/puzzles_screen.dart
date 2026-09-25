@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../board/chess_board.dart';
 import '../core/api.dart';
+import '../core/telemetry.dart';
 import 'puzzle_session.dart';
 import 'puzzle_store.dart';
 
@@ -46,6 +47,9 @@ class _PuzzlesScreenState extends State<PuzzlesScreen> {
     if (store == null || _syncing) return;
     setState(() => _syncing = true);
     final r = await store.sync(Api.instance);
+    if (r.uploaded > 0 || r.overLimit > 0) {
+      Telemetry.puzzlesSynced(uploaded: r.uploaded, overLimit: r.overLimit);
+    }
     if (!mounted) return;
     setState(() {
       _syncing = false;
@@ -86,6 +90,8 @@ class _PuzzlesScreenState extends State<PuzzlesScreen> {
   Future<void> _finishIfDone(PuzzleSession s) async {
     if (s.status == PuzzleStatus.playing) return;
     await _store!.record(s.puzzle, s.status == PuzzleStatus.solved);
+    final online = !(await Connectivity().checkConnectivity()).contains(ConnectivityResult.none);
+    Telemetry.puzzleFinished(solved: s.status == PuzzleStatus.solved, offline: !online);
     setState(() {});
     _sync(); // uploads straight away when online; otherwise it waits
   }

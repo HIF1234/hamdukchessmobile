@@ -1,4 +1,4 @@
-package ng.com.hamduk.hamduk_chess
+package ng.com.hamduk.chess
 
 import io.flutter.embedding.android.FlutterActivity
 
