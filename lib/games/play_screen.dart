@@ -26,6 +26,23 @@ class _PlayScreenState extends State<PlayScreen> {
   Timer? _timer;
   RealtimeChannel? _channel;
   String? _error;
+  int _gamesPlayed = -1; // for the spec §10 cohort; -1 until known
+
+  @override
+  void initState() {
+    super.initState();
+    _loadGamesPlayed();
+  }
+
+  Future<void> _loadGamesPlayed() async {
+    try {
+      final me = await Api.instance.get('/me') as Map;
+      final ratings = (me['ratings'] as List).cast<Map>();
+      _gamesPlayed = ratings.fold<int>(0, (n, r) => n + ((r['games_played'] as num?)?.toInt() ?? 0));
+    } catch (_) {
+      // Offline or failed: the events are still logged, just without the count.
+    }
+  }
 
   String get _myId => Supabase.instance.client.auth.currentUser!.id;
 
@@ -110,7 +127,7 @@ class _PlayScreenState extends State<PlayScreen> {
     if (!mounted) return;
     setState(() => _seeking = null);
     await Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => GameScreen(gameId: gameId, myId: _myId),
+      builder: (_) => GameScreen(gameId: gameId, myId: _myId, gamesPlayed: _gamesPlayed),
     ));
   }
 
