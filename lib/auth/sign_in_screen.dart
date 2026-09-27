@@ -56,7 +56,9 @@ class _SignInScreenState extends State<SignInScreen> {
             email: email,
             password: _password.text,
             data: {if (username.isNotEmpty) 'username': username},
-            emailRedirectTo: '$_site/play',
+            // Lands on our verified Android App Link; supabase_flutter's own deep-link
+            // handling then signs the app in directly, without opening a browser.
+            emailRedirectTo: '$_site/auth/callback',
           );
           if (r.session == null) {
             _switch(_Mode.signIn);

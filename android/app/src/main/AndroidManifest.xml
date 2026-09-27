@@ -31,6 +31,11 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" android:host="play.chess.hamduk.com.ng" android:pathPrefix="/challenge/" />
+                <!-- Email confirmation / magic-link / password-recovery redirects. Supabase's
+                     own /auth/v1/verify redirects the browser here after verifying the token,
+                     landing on this app link with the session in the URL; supabase_flutter
+                     picks it up automatically (SupabaseAuth's built-in deep-link handling). -->
+                <data android:scheme="https" android:host="play.chess.hamduk.com.ng" android:pathPrefix="/auth/callback" />
             </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.
