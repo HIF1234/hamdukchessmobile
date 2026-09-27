@@ -26,6 +26,7 @@ class GameState {
     this.winnerId,
     this.drawOfferBy,
     this.timeControl = '',
+    this.chess960 = false,
   });
 
   final String id;
@@ -43,6 +44,7 @@ class GameState {
   final String? winnerId;
   final String? drawOfferBy;
   final String timeControl;
+  final bool chess960;
 
   bool get active => status == 'active';
   bool get whiteToMove => fen.split(' ')[1] == 'w';
@@ -69,6 +71,7 @@ class GameState {
         winnerId: j['winner_id'] as String?,
         drawOfferBy: j['draw_offer_by'] as String?,
         timeControl: j['time_control'] as String? ?? '',
+        chess960: j['chess960_start_fen'] != null,
       );
 
   /// A Realtime update of the games row. It has no player names, so those are kept.
@@ -88,7 +91,16 @@ class GameState {
         winnerId: row['winner_id'] as String?,
         drawOfferBy: row['draw_offer_by'] as String?,
         timeControl: timeControl,
+        chess960: chess960,
       );
+
+  /// All moves in SAN, read from the PGN (for game review).
+  List<String> get sanMoves {
+    if (pgn == null || pgn!.isEmpty) return const [];
+    final g = ch.Chess();
+    if (!g.load_pgn(pgn)) return const [];
+    return g.getHistory().cast<String>();
+  }
 
   /// The last move, for highlighting, read from the PGN.
   (String, String)? get lastMove {

@@ -17,8 +17,29 @@ class PuzzlesScreen extends StatefulWidget {
   State<PuzzlesScreen> createState() => _PuzzlesScreenState();
 }
 
+/// Themes offered for practice, most useful first. Keys are the Lichess theme tags on our
+/// puzzles.
+const puzzleThemes = <(String?, String)>[
+  (null, 'Rated mix'),
+  ('mateIn1', 'Mate in 1'),
+  ('mateIn2', 'Mate in 2'),
+  ('fork', 'Forks'),
+  ('pin', 'Pins'),
+  ('skewer', 'Skewers'),
+  ('hangingPiece', 'Hanging pieces'),
+  ('discoveredAttack', 'Discovered attacks'),
+  ('backRankMate', 'Back rank'),
+  ('sacrifice', 'Sacrifices'),
+  ('deflection', 'Deflection'),
+  ('kingsideAttack', 'Attacking the king'),
+  ('mateIn3', 'Mate in 3'),
+  ('endgame', 'Endgames'),
+  ('promotion', 'Promotion'),
+];
+
 class _PuzzlesScreenState extends State<PuzzlesScreen> {
   PuzzleStore? _store;
+  String? _theme;
   PuzzleSession? _session;
   bool _syncing = false;
   bool _showHint = false;
@@ -35,12 +56,24 @@ class _PuzzlesScreenState extends State<PuzzlesScreen> {
   }
 
   Future<void> _init() async {
-    final store = await PuzzleStore.open();
+    final store = await PuzzleStore.open(null, _theme);
+    if (!mounted) return;
     setState(() {
       _store = store;
+      _note = null;
       _nextPuzzle();
     });
     await _sync();
+  }
+
+  Future<void> _pickTheme(String? theme) async {
+    if (theme == _theme) return;
+    setState(() {
+      _theme = theme;
+      _store = null;
+      _session = null;
+    });
+    await _init();
   }
 
   Future<void> _sync() async {
@@ -110,6 +143,20 @@ class _PuzzlesScreenState extends State<PuzzlesScreen> {
           const Spacer(),
           if (store?.rating != null) Text('Rating ${store!.rating}', style: t.textTheme.titleMedium),
         ]),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 40,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            children: [
+              for (final (key, label) in puzzleThemes)
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: ChoiceChip(label: Text(label), selected: _theme == key, onSelected: (_) => _pickTheme(key)),
+                ),
+            ],
+          ),
+        ),
         const SizedBox(height: 4),
         Text(
           store == null

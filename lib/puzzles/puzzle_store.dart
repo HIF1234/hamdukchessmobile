@@ -5,26 +5,36 @@ import 'puzzle_session.dart';
 /// Offline puzzles: a downloaded pack, the ones already done, and results waiting to upload.
 /// Everything is saved on the device, so the app works on a bus with no data.
 class PuzzleStore {
-  PuzzleStore(this._store);
+  PuzzleStore(this._store, {this.theme});
   final JsonStore _store;
 
-  static const _packKey = 'puzzle_pack';
+  /// Null for the rated mix; otherwise a Lichess theme such as "fork" or "mateIn2".
+  final String? theme;
+
+  String get _packKey => theme == null ? 'puzzle_pack' : 'puzzle_pack_$theme';
   static const _queueKey = 'puzzle_queue';
   static const refillBelow = 10;
 
   List<Puzzle> _pack = [];
-  List<Map<String, dynamic>> _queue = [];
+
+  // One upload queue for every theme, shared by all stores, so switching themes never
+  // loses a result.
+  static List<Map<String, dynamic>>? _sharedQueue;
+  List<Map<String, dynamic>> get _queue => _sharedQueue!;
   int? rating; // last rating the server told us
   int maxPack = 30;
 
   int get remaining => _pack.length;
   int get pendingUploads => _queue.length;
 
-  static Future<PuzzleStore> open([JsonStore? store]) async {
-    final s = PuzzleStore(store ?? await JsonStore.open());
+  static Future<PuzzleStore> open([JsonStore? store, String? theme]) async {
+    final s = PuzzleStore(store ?? await JsonStore.open(), theme: theme);
     await s._load();
     return s;
   }
+
+  /// For tests: forget the in-memory queue so it's read from storage again.
+  static void resetForTests() => _sharedQueue = null;
 
   Future<void> _load() async {
     final pack = await _store.read(_packKey);
@@ -35,8 +45,10 @@ class PuzzleStore {
       rating = (pack['rating'] as num?)?.toInt();
       maxPack = (pack['maxPack'] as num?)?.toInt() ?? maxPack;
     }
-    final q = await _store.read(_queueKey);
-    if (q is List) _queue = q.map((e) => (e as Map).cast<String, dynamic>()).toList();
+    if (_sharedQueue == null) {
+      final q = await _store.read(_queueKey);
+      _sharedQueue = q is List ? q.map((e) => (e as Map).cast<String, dynamic>()).toList() : [];
+    }
   }
 
   Future<void> _savePack() => _store.write(_packKey, {
@@ -77,7 +89,7 @@ class PuzzleStore {
         await _store.write(_queueKey, _queue);
       }
       if (_pack.length < refillBelow) {
-        final res = await api.get('/puzzles/pack', {'count': '$maxPack'}) as Map;
+        final res = await api.get('/puzzles/pack', {'count': '$maxPack', 'theme': ?theme}) as Map;
         maxPack = (res['maxPack'] as num).toInt();
         rating = (res['rating'] as num?)?.toInt() ?? rating;
         final known = _pack.map((p) => p.id).toSet();

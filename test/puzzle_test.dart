@@ -47,7 +47,10 @@ void main() {
 
   group('PuzzleStore (offline)', () {
     late Directory dir;
-    setUp(() => dir = Directory.systemTemp.createTempSync('hamduk'));
+    setUp(() {
+      dir = Directory.systemTemp.createTempSync('hamduk');
+      PuzzleStore.resetForTests();
+    });
     tearDown(() => dir.deleteSync(recursive: true));
 
     test('results queue on the device and survive a restart', () async {
@@ -57,10 +60,22 @@ void main() {
       expect(store.remaining, 2);
       await store.record(store.next!, true);
 
+      PuzzleStore.resetForTests(); // as if the app had restarted
       final reopened = await PuzzleStore.open(json);
       expect(reopened.remaining, 1);
       expect(reopened.pendingUploads, 1);
       expect(reopened.next!.id, fork.id);
+    });
+
+    test('each theme keeps its own pack, but results share one upload queue', () async {
+      final json = JsonStore.at(dir);
+      await json.write('puzzle_pack_fork', {'puzzles': [fork.toJson()], 'rating': 1200, 'maxPack': 30});
+      final rated = await PuzzleStore.open(json);
+      final forks = await PuzzleStore.open(json, 'fork');
+      expect(rated.remaining, 0);
+      expect(forks.remaining, 1);
+      await forks.record(forks.next!, true);
+      expect(rated.pendingUploads, 1);
     });
   });
 }

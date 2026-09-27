@@ -9,6 +9,7 @@ import '../core/telemetry.dart';
 import '../engine/bot_brain.dart';
 import '../engine/device.dart';
 import '../engine/uci_engine.dart';
+import '../review/review_screen.dart';
 import 'bot_results.dart';
 
 /// A game against one of the Naija bots, played entirely on the phone. Stockfish runs as a
@@ -168,7 +169,24 @@ class _BotGameScreenState extends State<BotGameScreen> {
             if (_over != null) ...[
               Text(_over!, style: t.textTheme.titleLarge, textAlign: TextAlign.center),
               const SizedBox(height: 8),
-              FilledButton(onPressed: _newGame, child: const Text('Play again')),
+              Row(children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: _ply < 2
+                        ? null
+                        : () => Navigator.of(context).push(MaterialPageRoute(
+                              builder: (_) => ReviewScreen(
+                                startFen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+                                sanMoves: _game.getHistory().cast<String>(),
+                                whiteAtBottom: widget.playWhite,
+                              ),
+                            )),
+                    child: const Text('Review'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(child: FilledButton(onPressed: _newGame, child: const Text('Play again'))),
+              ]),
             ] else
               Align(
                 alignment: Alignment.centerRight,

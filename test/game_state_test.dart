@@ -80,6 +80,11 @@ void main() {
     expect(g.ply, 1);
   });
 
+  test('all moves are read from the PGN for review', () {
+    expect(game(pgn: '1. e4 e5 2. Nf3 Nc6').sanMoves, ['e4', 'e5', 'Nf3', 'Nc6']);
+    expect(game(pgn: null).sanMoves, isEmpty);
+  });
+
   test('the last move is read from the PGN', () {
     expect(game(pgn: '1. e4 e5 2. Nf3').lastMove, ('g1', 'f3'));
     expect(game(pgn: null).lastMove, isNull);

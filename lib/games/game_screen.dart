@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../board/chess_board.dart';
 import '../core/settings.dart';
+import '../review/review_screen.dart';
 import 'game_controller.dart';
 import 'game_state.dart';
 
@@ -104,6 +105,18 @@ class _GameScreenState extends State<GameScreen> {
                     secondary: ('Decline', () => c.answerDraw(false)),
                   ),
                 if (!g.active) _Result(game: g, myId: widget.myId),
+                if (!g.active && !g.chess960 && g.sanMoves.length >= 2)
+                  FilledButton.icon(
+                    onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => ReviewScreen(
+                        startFen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+                        sanMoves: g.sanMoves,
+                        whiteAtBottom: c.isWhite,
+                      ),
+                    )),
+                    icon: const Icon(Icons.analytics_outlined),
+                    label: const Text('Review this game'),
+                  ),
                 if (g.active)
                   Row(children: [
                     OutlinedButton(
