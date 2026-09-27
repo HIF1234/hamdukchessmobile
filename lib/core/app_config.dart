@@ -14,6 +14,8 @@ class AppConfig {
   String get supabaseUrl => raw['supabase']['url'] as String;
   String get supabaseAnonKey => raw['supabase']['anonKey'] as String;
   String get minAppVersion => raw['minAppVersion'] as String? ?? '1.0.0';
+  /// Null until the platform sets GOOGLE_WEB_CLIENT_ID; Google sign-in hides until then.
+  String? get googleWebClientId => raw['googleWebClientId'] as String?;
   List<Map<String, dynamic>> get bots => (raw['bots'] as List).cast<Map<String, dynamic>>();
   List<Map<String, dynamic>> get timeControls =>
       (raw['timeControls'] as List).cast<Map<String, dynamic>>();

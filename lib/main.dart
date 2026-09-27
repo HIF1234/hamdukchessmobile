@@ -100,7 +100,7 @@ class _AuthGate extends StatelessWidget {
     return StreamBuilder<AuthState>(
       stream: auth.onAuthStateChange,
       builder: (context, _) =>
-          auth.currentSession == null ? const SignInScreen() : HomeShell(config: config),
+          auth.currentSession == null ? SignInScreen(config: config) : HomeShell(config: config),
     );
   }
 }

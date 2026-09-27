@@ -1,7 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hamduk_chess/auth/sign_in_screen.dart';
+import 'package:hamduk_chess/core/app_config.dart';
 import 'package:hamduk_chess/core/links.dart';
+
+// No googleWebClientId, so the Google button stays hidden and these tests exercise the
+// email/password form the same way they would before Google sign-in existed.
+final _noGoogleConfig = AppConfig(const {
+  'supabase': {'url': 'https://x.supabase.co', 'anonKey': 'x'},
+});
 
 void main() {
   group('challenge links', () {
@@ -27,7 +34,8 @@ void main() {
   });
 
   group('sign-in screen', () {
-    Future<void> open(WidgetTester t) => t.pumpWidget(const MaterialApp(home: SignInScreen()));
+    Future<void> open(WidgetTester t) =>
+        t.pumpWidget(MaterialApp(home: SignInScreen(config: _noGoogleConfig)));
 
     testWidgets('checks the email and password before contacting the server', (t) async {
       await open(t);
@@ -64,6 +72,23 @@ void main() {
       await t.tap(find.text('Back to sign in'));
       await t.pump();
       expect(find.widgetWithText(TextField, 'Password'), findsOneWidget);
+    });
+
+    testWidgets('Google sign-in is hidden until the server configures a web client id', (t) async {
+      await open(t); // _noGoogleConfig has no googleWebClientId
+      expect(find.text('Continue with Google'), findsNothing);
+
+      final withGoogle = AppConfig(const {
+        'supabase': {'url': 'https://x.supabase.co', 'anonKey': 'x'},
+        'googleWebClientId': '123-abc.apps.googleusercontent.com',
+      });
+      await t.pumpWidget(MaterialApp(home: SignInScreen(config: withGoogle)));
+      expect(find.text('Continue with Google'), findsOneWidget);
+
+      // Not offered on the "forgot password" screen (there's no account to link yet).
+      await t.tap(find.text('Forgot password?'));
+      await t.pump();
+      expect(find.text('Continue with Google'), findsNothing);
     });
   });
 }

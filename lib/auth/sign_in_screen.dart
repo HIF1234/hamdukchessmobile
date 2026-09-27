@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../core/app_config.dart';
+import 'google_auth.dart';
+
 const _site = 'https://play.chess.hamduk.com.ng';
 
 enum _Mode { signIn, signUp, reset }
@@ -8,7 +11,8 @@ enum _Mode { signIn, signUp, reset }
 /// Sign in, create an account, or reset a password. Same rules as the website: new accounts
 /// confirm their email first; password resets finish on the website.
 class SignInScreen extends StatefulWidget {
-  const SignInScreen({super.key});
+  const SignInScreen({super.key, required this.config});
+  final AppConfig config;
 
   @override
   State<SignInScreen> createState() => _SignInScreenState();
@@ -30,6 +34,25 @@ class _SignInScreenState extends State<SignInScreen> {
         _error = null;
         _info = null;
       });
+
+  Future<void> _signInWithGoogle() async {
+    final clientId = widget.config.googleWebClientId;
+    if (clientId == null) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+      _info = null;
+    });
+    try {
+      await GoogleAuth.signIn(clientId);
+    } catch (e) {
+      if (!GoogleAuth.isCancellation(e)) {
+        setState(() => _error = 'Google sign-in failed. Try again, or use your email.');
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
 
   Future<void> _submit() async {
     final email = _email.text.trim();
@@ -147,6 +170,20 @@ class _SignInScreenState extends State<SignInScreen> {
                         }),
                 ),
               ),
+              if (_mode != _Mode.reset && widget.config.googleWebClientId != null) ...[
+                const SizedBox(height: 12),
+                Row(children: [
+                  const Expanded(child: Divider()),
+                  Padding(padding: const EdgeInsets.symmetric(horizontal: 8), child: Text('or', style: t.textTheme.bodySmall)),
+                  const Expanded(child: Divider()),
+                ]),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: _busy ? null : _signInWithGoogle,
+                  icon: const Icon(Icons.g_mobiledata, size: 28),
+                  label: const Text('Continue with Google'),
+                ),
+              ],
               const SizedBox(height: 12),
               if (_mode == _Mode.signIn) ...[
                 TextButton(onPressed: () => _switch(_Mode.signUp), child: const Text('New here? Create a free account')),
