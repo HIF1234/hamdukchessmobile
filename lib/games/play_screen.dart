@@ -9,6 +9,7 @@ import '../core/settings.dart';
 import '../core/storage.dart';
 import '../bots/bot_game_screen.dart';
 import '../engine/device.dart';
+import 'challenge_screens.dart';
 import 'game_screen.dart';
 
 /// Pick a time control and find an opponent. Works like the website: ask the server every
@@ -57,6 +58,54 @@ class _PlayScreenState extends State<PlayScreen> {
     } catch (_) {
       // Offline or failed: keep the cached tier; events are logged without the game count.
     }
+  }
+
+  Future<void> _challengeFriend() async {
+    final tcs = widget.config.timeControls;
+    var tc = tcs.firstWhere((t) => t['id'] == '10+0', orElse: () => tcs.first)['id'] as String;
+    var colour = 'random';
+    var rated = false;
+    final go = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, set) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Text('Challenge a friend', style: Theme.of(ctx).textTheme.titleLarge),
+              const SizedBox(height: 12),
+              Wrap(spacing: 8, runSpacing: 8, children: [
+                for (final t in tcs)
+                  ChoiceChip(label: Text(t['id'] as String), selected: tc == t['id'], onSelected: (_) => set(() => tc = t['id'] as String)),
+              ]),
+              const SizedBox(height: 12),
+              SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment(value: 'white', label: Text('White')),
+                  ButtonSegment(value: 'random', label: Text('Random')),
+                  ButtonSegment(value: 'black', label: Text('Black')),
+                ],
+                selected: {colour},
+                onSelectionChanged: (s) => set(() => colour = s.first),
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Rated'),
+                value: rated,
+                onChanged: (v) => set(() => rated = v),
+              ),
+              FilledButton.icon(
+                onPressed: () => Navigator.pop(ctx, true),
+                icon: const Icon(Icons.share),
+                label: const Text('Create link and share'),
+              ),
+            ]),
+          ),
+        ),
+      ),
+    );
+    if (go == true && mounted) await createAndShareChallenge(context, timeControl: tc, color: colour, rated: rated);
   }
 
   Future<void> _playBot(Map<String, dynamic> bot) async {
@@ -214,6 +263,12 @@ class _PlayScreenState extends State<PlayScreen> {
             ],
           ),
         ],
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+          onPressed: _seeking == null ? _challengeFriend : null,
+          icon: const Icon(Icons.person_add_alt_1),
+          label: const Text('Challenge a friend (WhatsApp link)'),
+        ),
         const SizedBox(height: 24),
         Text('Naija bots', style: t.textTheme.titleMedium),
         const Text('Play offline, no data needed. Bot games don\'t change your rating.'),

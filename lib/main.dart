@@ -11,6 +11,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'auth/sign_in_screen.dart';
 import 'bots/bot_results.dart';
 import 'core/app_config.dart';
+import 'core/links.dart';
 import 'core/settings.dart';
 import 'core/telemetry.dart';
 import 'firebase_options.dart';
@@ -41,6 +42,7 @@ Future<void> main() async {
     auth.onAuthStateChange.listen((s) => Telemetry.setUser(s.session?.user.id));
     if (auth.currentSession != null) unawaited(BotResults.sync());
   }
+  unawaited(IncomingLinks.instance.start());
   AppLifecycleListener(onPause: () => Telemetry.sessionData(bytes: DataMeter.bytes, since: DataMeter.started));
   runApp(HamdukChessApp(config: config));
 }
