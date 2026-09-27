@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app_config.dart';
+import 'settings.dart';
 
 /// An error from the API: `code` is one of unauthorized, mfa_required, upgrade_required,
 /// not_found, limited, bad_request, rejected, or `network` when the request never landed.
@@ -43,6 +44,7 @@ class Api {
     } catch (e) {
       throw ApiError('network', 'No connection. Check your data or Wi-Fi.');
     }
+    DataMeter.add(req.contentLength + res.bodyBytes.length);
     final json = res.body.isEmpty ? null : jsonDecode(res.body);
     if (res.statusCode >= 400) {
       final map = json is Map ? json : const {};

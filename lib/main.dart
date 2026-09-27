@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'auth/sign_in_screen.dart';
 import 'core/app_config.dart';
+import 'core/settings.dart';
 import 'core/telemetry.dart';
 import 'firebase_options.dart';
 import 'home_shell.dart';
@@ -28,6 +29,7 @@ Future<void> main() async {
     return true;
   };
 
+  await AppSettings.instance.load();
   final config = await AppConfig.load();
   if (config != null) {
     await Supabase.initialize(url: config.supabaseUrl, publishableKey: config.supabaseAnonKey);
@@ -35,6 +37,7 @@ Future<void> main() async {
     unawaited(Telemetry.setUser(auth.currentUser?.id));
     auth.onAuthStateChange.listen((s) => Telemetry.setUser(s.session?.user.id));
   }
+  AppLifecycleListener(onPause: () => Telemetry.sessionData(bytes: DataMeter.bytes, since: DataMeter.started));
   runApp(HamdukChessApp(config: config));
 }
 

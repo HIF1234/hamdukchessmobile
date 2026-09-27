@@ -7,13 +7,18 @@ const _dark = Color(0xFFB58863);
 const _lastMove = Color(0x66F6D365);
 const _selected = Color(0x8CF5A623);
 const _dot = Color(0x59141414);
+const _premove = Color(0x802E7DDB);
+const _slide = Duration(milliseconds: 120);
 
 /// Called when the player tries a move. Return true if it was accepted.
 typedef MoveHandler = bool Function(String from, String to, String? promotion);
 
+/// Called when the player queues a move during the opponent's turn.
+typedef PremoveHandler = void Function(String from, String to, String? promotion);
+
 /// A fast, dependency-light board: squares in one paint pass, pieces as cached SVGs placed
 /// straight from the FEN. Tap a piece then a square, or drag. Pawns reaching the last rank
-/// promote to a queen.
+/// promote to a queen. Optionally slides the last move and takes premoves.
 class ChessBoardView extends StatefulWidget {
   const ChessBoardView({
     super.key,
@@ -22,6 +27,11 @@ class ChessBoardView extends StatefulWidget {
     this.onMove,
     this.lastMove,
     this.hintSquare,
+    this.playerColor,
+    this.onPremove,
+    this.onCancelPremove,
+    this.premove,
+    this.animate = true,
   });
 
   final String fen;
@@ -32,25 +42,58 @@ class ChessBoardView extends StatefulWidget {
   final (String, String)? lastMove;
   final String? hintSquare;
 
+  /// 'w' or 'b': the side this player controls. Null means whoever is to move (puzzles).
+  final String? playerColor;
+
+  /// When set, the player can queue a move while it's the opponent's turn.
+  final PremoveHandler? onPremove;
+  final VoidCallback? onCancelPremove;
+  final (String, String)? premove;
+
+  /// Slide the last move's piece. Off in low-data mode.
+  final bool animate;
+
   @override
   State<ChessBoardView> createState() => _ChessBoardViewState();
 }
 
-class _ChessBoardViewState extends State<ChessBoardView> {
+class _ChessBoardViewState extends State<ChessBoardView> with SingleTickerProviderStateMixin {
   String? _selectedSq;
   Set<String> _targets = const {};
+  bool _selectingPremove = false;
   String? _dragFrom;
   Offset? _dragPos;
+  bool _droppedByHand = false;
+  late final AnimationController _anim = AnimationController(vsync: this, duration: _slide, value: 1);
 
   @override
   void didUpdateWidget(ChessBoardView old) {
     super.didUpdateWidget(old);
-    if (old.fen != widget.fen) _clearSelection();
+    if (old.fen != widget.fen) {
+      _clearSelection();
+      // Slide the piece that just moved, unless the player dropped it there by hand.
+      if (widget.animate && widget.lastMove != null && widget.lastMove != old.lastMove && !_droppedByHand) {
+        _anim.forward(from: 0);
+      } else {
+        _anim.value = 1;
+      }
+      _droppedByHand = false;
+    }
   }
+
+  @override
+  void dispose() {
+    _anim.dispose();
+    super.dispose();
+  }
+
+  String get _toMove => widget.fen.split(' ')[1];
+  bool get _myTurn => widget.playerColor == null || widget.playerColor == _toMove;
 
   void _clearSelection() {
     _selectedSq = null;
     _targets = const {};
+    _selectingPremove = false;
   }
 
   Map<String, String> get _pieces => _placement(widget.fen);
@@ -74,39 +117,60 @@ class _ChessBoardViewState extends State<ChessBoardView> {
     return Offset(col * sq, row * sq);
   }
 
-  bool _isMine(String square) {
+  /// A piece the player may pick up now: to move on their turn, or to premove otherwise.
+  bool _canPick(String square) {
     final piece = _pieces[square];
     if (piece == null) return false;
-    final whiteToMove = widget.fen.split(' ')[1] == 'w';
-    return (piece[0] == 'w') == whiteToMove;
+    if (_myTurn) return widget.onMove != null && piece[0] == _toMove;
+    return widget.onPremove != null && piece[0] == widget.playerColor;
   }
 
   void _select(String square) {
-    final game = ch.Chess.fromFEN(widget.fen, check_validity: false);
-    final moves = game.moves({'square': square, 'verbose': true});
-    setState(() {
-      _selectedSq = square;
-      _targets = {for (final m in moves) (m as Map)['to'] as String};
-    });
+    if (_myTurn) {
+      final game = ch.Chess.fromFEN(widget.fen, check_validity: false);
+      final moves = game.moves({'square': square, 'verbose': true});
+      setState(() {
+        _selectedSq = square;
+        _selectingPremove = false;
+        _targets = {for (final m in moves) (m as Map)['to'] as String};
+      });
+    } else {
+      // A premove is checked for legality only when it's played, since the position will
+      // have changed by then. Any square not holding one of our own pieces is a candidate.
+      final mine = widget.playerColor;
+      setState(() {
+        _selectedSq = square;
+        _selectingPremove = true;
+        _targets = {
+          for (var f = 0; f < 8; f++)
+            for (var r = 1; r <= 8; r++) '${'abcdefgh'[f]}$r'
+        }..removeWhere((sq) => sq == square || (_pieces[sq]?.startsWith(mine ?? '-') ?? false));
+      });
+    }
   }
 
-  bool _tryMove(String from, String to) {
+  void _tryMove(String from, String to, {bool byHand = false}) {
     final piece = _pieces[from];
     final promo = piece != null && piece[1] == 'P' && (to[1] == '8' || to[1] == '1') ? 'q' : null;
-    final ok = widget.onMove?.call(from, to, promo) ?? false;
+    if (_selectingPremove) {
+      widget.onPremove?.call(from, to, promo);
+    } else {
+      _droppedByHand = byHand;
+      widget.onMove?.call(from, to, promo);
+    }
     setState(_clearSelection);
-    return ok;
   }
 
   void _onTap(Offset p, double size) {
-    if (widget.onMove == null) return;
+    if (widget.onMove == null && widget.onPremove == null) return;
     final sq = _squareAt(p, size);
     if (sq == null) return;
     if (_selectedSq != null && _targets.contains(sq)) {
       _tryMove(_selectedSq!, sq);
-    } else if (_isMine(sq) && sq != _selectedSq) {
+    } else if (_canPick(sq) && sq != _selectedSq) {
       _select(sq);
     } else {
+      if (widget.premove != null && _selectedSq == null) widget.onCancelPremove?.call();
       setState(_clearSelection);
     }
   }
@@ -121,11 +185,11 @@ class _ChessBoardViewState extends State<ChessBoardView> {
         final pieces = _pieces;
         return GestureDetector(
           onTapUp: (d) => _onTap(d.localPosition, size),
-          onPanStart: widget.onMove == null
+          onPanStart: widget.onMove == null && widget.onPremove == null
               ? null
               : (d) {
                   final s = _squareAt(d.localPosition, size);
-                  if (s != null && _isMine(s)) {
+                  if (s != null && _canPick(s)) {
                     _select(s);
                     setState(() {
                       _dragFrom = s;
@@ -143,7 +207,9 @@ class _ChessBoardViewState extends State<ChessBoardView> {
               _dragFrom = null;
               _dragPos = null;
             });
-            if (from != null && to != null && to != from && _targets.contains(to)) _tryMove(from, to);
+            if (from != null && to != null && to != from && _targets.contains(to)) {
+              _tryMove(from, to, byHand: true);
+            }
           },
           child: Stack(children: [
             CustomPaint(
@@ -154,22 +220,37 @@ class _ChessBoardViewState extends State<ChessBoardView> {
                   if (widget.lastMove != null) widget.lastMove!.$1: _lastMove,
                   if (widget.lastMove != null) widget.lastMove!.$2: _lastMove,
                   ?widget.hintSquare: _selected,
-                  ?_selectedSq: _selected,
+                  if (widget.premove != null) widget.premove!.$1: _premove,
+                  if (widget.premove != null) widget.premove!.$2: _premove,
+                  ?_selectedSq: _selectingPremove ? _premove : _selected,
                 },
-                dots: _targets,
+                // A premove can go almost anywhere, so dots would only be noise.
+                dots: _selectingPremove ? const {} : _targets,
                 origin: (s) => _origin(s, size),
                 squareSize: sq,
               ),
             ),
             for (final e in pieces.entries)
               if (e.key != _dragFrom)
-                Positioned(
-                  left: _origin(e.key, size).dx,
-                  top: _origin(e.key, size).dy,
-                  width: sq,
-                  height: sq,
-                  child: IgnorePointer(child: _PieceImage(e.value)),
-                ),
+                if (widget.lastMove != null && e.key == widget.lastMove!.$2)
+                  // The piece that just moved slides from its old square.
+                  AnimatedBuilder(
+                    animation: _anim,
+                    builder: (context, child) {
+                      final at = Offset.lerp(_origin(widget.lastMove!.$1, size), _origin(e.key, size),
+                          Curves.easeOut.transform(_anim.value))!;
+                      return Positioned(left: at.dx, top: at.dy, width: sq, height: sq, child: child!);
+                    },
+                    child: IgnorePointer(child: _PieceImage(e.value)),
+                  )
+                else
+                  Positioned(
+                    left: _origin(e.key, size).dx,
+                    top: _origin(e.key, size).dy,
+                    width: sq,
+                    height: sq,
+                    child: IgnorePointer(child: _PieceImage(e.value)),
+                  ),
             if (_dragFrom != null && _dragPos != null && pieces[_dragFrom] != null)
               Positioned(
                 // Lifted a little above the finger so the player can see where it lands.

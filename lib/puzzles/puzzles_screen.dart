@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../board/chess_board.dart';
 import '../core/api.dart';
+import '../core/settings.dart';
 import '../core/telemetry.dart';
 import 'puzzle_session.dart';
 import 'puzzle_store.dart';
@@ -137,6 +138,7 @@ class _PuzzlesScreenState extends State<PuzzlesScreen> {
             lastMove: s.lastMove,
             hintSquare: _showHint ? s.hint : null,
             onMove: s.status == PuzzleStatus.playing && !s.awaitingReply ? _onMove : null,
+            animate: !AppSettings.instance.lowData,
           ),
           const SizedBox(height: 12),
           Text(

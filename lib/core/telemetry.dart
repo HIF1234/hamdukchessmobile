@@ -27,6 +27,13 @@ class Telemetry {
   static Future<void> puzzlesSynced({required int uploaded, required int overLimit}) =>
       _analytics.logEvent(name: 'puzzles_synced', parameters: {'uploaded': uploaded, 'over_limit': overLimit});
 
+  /// Spec §4: data used by the app's API calls this session, sent when the app goes to the
+  /// background.
+  static Future<void> sessionData({required int bytes, required DateTime since}) => _analytics.logEvent(
+        name: 'session_data',
+        parameters: {'kb': bytes ~/ 1024, 'minutes': DateTime.now().difference(since).inMinutes},
+      );
+
   // Spec §10: retention of players who hit a disconnect in their first games. The online game
   // screen calls these; `gamesPlayed` lets the cohort be filtered to the first three games.
   static Future<void> gameDisconnected({required String gameId, required int gamesPlayed}) =>

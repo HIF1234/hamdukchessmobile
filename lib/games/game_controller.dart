@@ -33,6 +33,9 @@ class GameController extends ChangeNotifier with WidgetsBindingObserver {
 
   GameState? game;
   PendingMove? pending;
+
+  /// A move queued during the opponent's turn: (from, to, promotion).
+  (String, String, String?)? premove;
   String? error;
   String? notice;
   bool connected = true; // our own Realtime link
@@ -87,6 +90,7 @@ class GameController extends ChangeNotifier with WidgetsBindingObserver {
       game = fresh;
       error = null;
       _notify();
+      _maybePlayPremove();
     } on ApiError catch (e) {
       error = e.isNetwork ? null : e.message;
       _notify();
@@ -109,6 +113,7 @@ class GameController extends ChangeNotifier with WidgetsBindingObserver {
             if (pending != null && next.ply >= pending!.ply) pending = null;
             game = next;
             _notify();
+            _maybePlayPremove();
           },
         )
         .onPostgresChanges(
@@ -178,6 +183,25 @@ class GameController extends ChangeNotifier with WidgetsBindingObserver {
     _notify();
     _send();
     return true;
+  }
+
+  void setPremove(String from, String to, String? promotion) {
+    if (game?.active != true) return;
+    premove = (from, to, promotion);
+    _notify();
+  }
+
+  void cancelPremove() {
+    premove = null;
+    _notify();
+  }
+
+  /// Plays the queued premove as soon as it's our turn, if it's still legal then.
+  void _maybePlayPremove() {
+    final p = premove;
+    if (p == null || !myTurn) return;
+    premove = null;
+    if (!play(p.$1, p.$2, p.$3)) _notify(); // illegal now: dropped
   }
 
   Future<void> _send() async {

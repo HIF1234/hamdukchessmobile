@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/api.dart';
 import '../core/app_config.dart';
+import '../core/settings.dart';
 import 'game_screen.dart';
 
 /// Pick a time control and find an opponent. Works like the website: ask the server every
@@ -188,7 +189,10 @@ class _PlayScreenState extends State<PlayScreen> {
         for (final b in widget.config.bots)
           ListTile(
             contentPadding: EdgeInsets.zero,
-            leading: CircleAvatar(backgroundImage: NetworkImage(b['portraitUrl'] as String)),
+            // Low data mode skips the portraits (about 30 KB each).
+            leading: AppSettings.instance.lowData
+                ? CircleAvatar(child: Text((b['name'] as String).substring(0, 1)))
+                : CircleAvatar(backgroundImage: NetworkImage(b['portraitUrl'] as String)),
             title: Text(b['name'] as String),
             subtitle: Text('${b['hometown']} · ${b['catchphrase']}'),
             trailing: Text('${b['rating']}'),

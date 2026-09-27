@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../board/chess_board.dart';
+import '../core/settings.dart';
 import 'game_controller.dart';
 import 'game_state.dart';
 
@@ -79,7 +80,12 @@ class _GameScreenState extends State<GameScreen> {
                   fen: c.boardFen,
                   whiteAtBottom: c.isWhite,
                   lastMove: c.pending != null ? (c.pending!.from, c.pending!.to) : g.lastMove,
-                  onMove: c.myTurn ? c.play : null,
+                  playerColor: c.isWhite ? 'w' : 'b',
+                  onMove: g.active ? c.play : null,
+                  onPremove: g.active ? c.setPremove : null,
+                  onCancelPremove: c.cancelPremove,
+                  premove: c.premove == null ? null : (c.premove!.$1, c.premove!.$2),
+                  animate: !AppSettings.instance.lowData,
                 ),
                 const SizedBox(height: 6),
                 _PlayerRow(controller: c, player: me, white: c.isWhite, presence: null),

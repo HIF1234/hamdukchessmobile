@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/api.dart';
+import '../core/settings.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -56,7 +57,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
               trailing: Text('${r['rating']}', style: t.textTheme.titleLarge),
               subtitle: Text('${r['games_played']} games'),
             ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
+          ListenableBuilder(
+            listenable: AppSettings.instance,
+            builder: (context, _) => SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Low data mode'),
+              subtitle: Text('No pictures or animations. This session: ${DataMeter.label}.'),
+              value: AppSettings.instance.lowData,
+              onChanged: AppSettings.instance.setLowData,
+            ),
+          ),
+          const SizedBox(height: 16),
           OutlinedButton(
             onPressed: () => Supabase.instance.client.auth.signOut(),
             child: const Text('Sign out'),
