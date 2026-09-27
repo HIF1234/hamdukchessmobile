@@ -49,3 +49,8 @@ app.*.map.json
 
 # Android build output
 /android/build/
+
+# Stockfish source and the test build (engine/build.sh recreates them)
+/engine/Stockfish-sf_11/
+/engine/sf_11.tar.gz
+/engine/host/

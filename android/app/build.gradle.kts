@@ -33,6 +33,14 @@ android {
         versionName = flutter.versionName
     }
 
+    packaging {
+        jniLibs {
+            // Stockfish (jniLibs/*/libstockfish.so) is a separate program the app starts. It has
+            // to be unpacked onto the phone at install time to be runnable, which this does.
+            useLegacyPackaging = true
+        }
+    }
+
     buildTypes {
         release {
             // TODO: Add your own signing config for the release build.

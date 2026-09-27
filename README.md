@@ -39,5 +39,9 @@ This app is not open source, so **no GPL or AGPL packages**. In particular don't
 `dartchess`, `chessground` or `stockfish` from pub.dev; all three are GPL-3.0. Chess rules come
 from `chess` (BSD-2-Clause). Before adding a dependency, check its licence on pub.dev.
 
-Running Stockfish on the device is planned. Stockfish is GPL-3.0, so how it's bundled needs a
-decision before it's added; see `NOTICE.md`.
+The bots run **Stockfish 11** on the phone as a separate program (GPL-3.0). Read `NOTICE.md`
+before changing anything in `engine/` or `lib/engine/`: the separation and the published source
+are what keep the rest of the app closed-source.
+
+To rebuild the engine (needs the Android NDK): `engine/build.sh`. It also builds a copy for this
+computer that `test/engine_test.dart` uses.

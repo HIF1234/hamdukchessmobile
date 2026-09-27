@@ -68,6 +68,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
               onChanged: AppSettings.instance.setLowData,
             ),
           ),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('About & licences'),
+            subtitle: const Text('Open-source software used in this app'),
+            onTap: () => showLicensePage(context: context, applicationName: 'Hamduk Chess'),
+          ),
           const SizedBox(height: 16),
           OutlinedButton(
             onPressed: () => Supabase.instance.client.auth.signOut(),

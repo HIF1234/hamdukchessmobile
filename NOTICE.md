@@ -33,8 +33,20 @@ SOFTWARE.
 
 See `pubspec.yaml`. All direct dependencies are under permissive licences (MIT, BSD).
 
-## Stockfish (not yet included)
+## Stockfish (bots)
 
-Stockfish is GPL-3.0. Including it in the app means meeting the GPL's terms for it, at least
-publishing the Stockfish source we ship and our changes to it. Whether that also reaches the rest
-of the app depends on how it's bundled, so get advice before adding it.
+The Android app includes **Stockfish 11**, unmodified, licensed under the GNU GPL v3
+(`assets/licenses/GPL-3.0.txt`). It is a separate program (`android/app/src/main/jniLibs/*/
+libstockfish.so`, built by `engine/build.sh`) that the app starts as its own process and talks
+to only through UCI text commands on standard input and output (`lib/engine/uci_engine.dart`).
+It is not linked into the app.
+
+What the GPL requires, and where it's done:
+- **Licence notice and text** in the app: Profile → About & licences (registered in `lib/main.dart`).
+- **Complete corresponding source**, publicly available from the same place as the app:
+  https://play.chess.hamduk.com.ng/opensource/stockfish-sf_11-source.tar.gz (official sf_11,
+  unmodified) and the build script https://play.chess.hamduk.com.ng/opensource/stockfish-android-build.sh.
+  If `engine/build.sh` changes, publish the new copy there too.
+- **No changes** to Stockfish's code. If that ever changes, the modified source must be published.
+
+Get a lawyer to confirm this set-up before the paid launch.
