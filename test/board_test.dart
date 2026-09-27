@@ -103,4 +103,13 @@ void main() {
     await tap(t, 'a8');
     expect(promo, 'q');
   });
+
+  testWidgets('a hint arrow renders without crashing and repaints on change', (t) async {
+    await pump(t, const ChessBoardView(fen: start, arrow: ('e2', 'e4')));
+    expect(find.byType(ChessBoardView), findsOneWidget);
+    await pump(t, const ChessBoardView(fen: start, arrow: ('d2', 'd4')));
+    expect(find.byType(ChessBoardView), findsOneWidget);
+    await pump(t, const ChessBoardView(fen: start));
+    expect(find.byType(ChessBoardView), findsOneWidget);
+  });
 }

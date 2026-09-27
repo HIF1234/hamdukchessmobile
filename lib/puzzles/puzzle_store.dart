@@ -60,9 +60,11 @@ class PuzzleStore {
   Puzzle? get next => _pack.isEmpty ? null : _pack.first;
 
   /// Records a finished puzzle locally and removes it from the pack.
-  Future<void> record(Puzzle p, bool success) async {
+  /// [hintsUsed] (0-2) dampens the rating gain on solve: the server halves it (4+ ply
+  /// puzzles) or zeroes it (shorter ones) for 1 hint, and always zeroes it for 2.
+  Future<void> record(Puzzle p, bool success, {int hintsUsed = 0}) async {
     _pack.removeWhere((x) => x.id == p.id);
-    _queue.add({'puzzleId': p.id, 'success': success});
+    _queue.add({'puzzleId': p.id, 'success': success, 'hintsUsed': hintsUsed});
     await Future.wait([_savePack(), _store.write(_queueKey, _queue)]);
   }
 

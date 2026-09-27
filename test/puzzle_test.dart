@@ -28,13 +28,30 @@ void main() {
 
     test('multi-move lines wait for the scripted reply', () {
       final s = PuzzleSession(fork);
-      expect(s.hint, 'd5');
+      s.showHint();
+      expect(s.hintFrom, 'd5');
+      expect(s.hintTo, isNull); // one press only shows the source square
       s.tryMove('d5', 'c7');
       expect(s.awaitingReply, isTrue);
       s.playReply();
       expect(s.lastMove, ('e8', 'd8'));
       s.tryMove('c7', 'a8');
       expect(s.status, PuzzleStatus.solved);
+    });
+
+    test('a second hint press shows the full move; hint resets on the next move', () {
+      final s = PuzzleSession(fork);
+      expect(s.hintFrom, isNull); // nothing shown until asked
+      s.showHint();
+      expect(s.hintLevel, 1);
+      s.showHint();
+      expect(s.hintLevel, 2);
+      expect(s.hintTo, 'c7');
+      s.showHint(); // capped at 2
+      expect(s.hintLevel, 2);
+      s.tryMove('d5', 'c7');
+      expect(s.hintLevel, 0); // fresh move, fresh hint
+      expect(s.maxHintLevel, 2); // but the puzzle-wide max is remembered
     });
 
     test('a promotion answer accepts the auto-queen', () {

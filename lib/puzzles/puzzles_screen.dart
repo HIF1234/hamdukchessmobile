@@ -42,7 +42,6 @@ class _PuzzlesScreenState extends State<PuzzlesScreen> {
   String? _theme;
   PuzzleSession? _session;
   bool _syncing = false;
-  bool _showHint = false;
   String? _note;
 
   @override
@@ -100,7 +99,6 @@ class _PuzzlesScreenState extends State<PuzzlesScreen> {
   void _nextPuzzle() {
     final p = _store?.next;
     _session = p == null ? null : PuzzleSession(p);
-    _showHint = false;
   }
 
   bool _onMove(String from, String to, String? promo) {
@@ -123,7 +121,7 @@ class _PuzzlesScreenState extends State<PuzzlesScreen> {
 
   Future<void> _finishIfDone(PuzzleSession s) async {
     if (s.status == PuzzleStatus.playing) return;
-    await _store!.record(s.puzzle, s.status == PuzzleStatus.solved);
+    await _store!.record(s.puzzle, s.status == PuzzleStatus.solved, hintsUsed: s.maxHintLevel);
     final online = !(await Connectivity().checkConnectivity()).contains(ConnectivityResult.none);
     Telemetry.puzzleFinished(solved: s.status == PuzzleStatus.solved, offline: !online);
     setState(() {});
@@ -183,7 +181,8 @@ class _PuzzlesScreenState extends State<PuzzlesScreen> {
             fen: s.fen,
             whiteAtBottom: s.whiteToSolve,
             lastMove: s.lastMove,
-            hintSquare: _showHint ? s.hint : null,
+            hintSquare: s.hintFrom,
+            arrow: s.hintTo != null ? (s.hintFrom!, s.hintTo!) : null,
             onMove: s.status == PuzzleStatus.playing && !s.awaitingReply ? _onMove : null,
             animate: !AppSettings.instance.lowData,
           ),
@@ -191,7 +190,11 @@ class _PuzzlesScreenState extends State<PuzzlesScreen> {
           Text(
             switch (s.status) {
               PuzzleStatus.playing => '${s.whiteToSolve ? 'White' : 'Black'} to play · rated ${s.puzzle.rating}',
-              PuzzleStatus.solved => 'Solved!',
+              PuzzleStatus.solved => s.maxHintLevel >= 2
+                  ? 'Solved! No rating gained (move was shown).'
+                  : s.maxHintLevel == 1
+                      ? 'Solved! Reduced rating gain (hint used).'
+                      : 'Solved!',
               PuzzleStatus.failed => 'Not quite. The best move was ${s.puzzle.solution.first}.',
             },
             style: t.textTheme.titleMedium,
@@ -199,7 +202,10 @@ class _PuzzlesScreenState extends State<PuzzlesScreen> {
           const SizedBox(height: 12),
           Row(children: [
             if (s.status == PuzzleStatus.playing)
-              TextButton(onPressed: () => setState(() => _showHint = true), child: const Text('Hint')),
+              TextButton(
+                onPressed: s.hintLevel >= 2 ? null : () => setState(s.showHint),
+                child: Text(s.hintLevel == 0 ? 'Hint' : 'Show move'),
+              ),
             const Spacer(),
             if (s.status != PuzzleStatus.playing)
               FilledButton(onPressed: () => setState(_nextPuzzle), child: const Text('Next puzzle')),

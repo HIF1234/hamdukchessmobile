@@ -32,6 +32,7 @@ class ChessBoardView extends StatefulWidget {
     this.onCancelPremove,
     this.premove,
     this.animate = true,
+    this.arrow,
   });
 
   final String fen;
@@ -52,6 +53,9 @@ class ChessBoardView extends StatefulWidget {
 
   /// Slide the last move's piece. Off in low-data mode.
   final bool animate;
+
+  /// A move to draw as an arrow (e.g. the second-tier puzzle hint).
+  final (String, String)? arrow;
 
   @override
   State<ChessBoardView> createState() => _ChessBoardViewState();
@@ -260,6 +264,17 @@ class _ChessBoardViewState extends State<ChessBoardView> with SingleTickerProvid
                 height: sq * 1.2,
                 child: IgnorePointer(child: _PieceImage(pieces[_dragFrom]!)),
               ),
+            if (widget.arrow != null)
+              IgnorePointer(
+                child: CustomPaint(
+                  size: Size.square(size),
+                  painter: _ArrowPainter(
+                    from: _origin(widget.arrow!.$1, size).translate(sq / 2, sq / 2),
+                    to: _origin(widget.arrow!.$2, size).translate(sq / 2, sq / 2),
+                    width: sq * 0.14,
+                  ),
+                ),
+              ),
           ]),
         );
       }),
@@ -330,6 +345,46 @@ class _SquaresPainter extends CustomPainter {
       old.dots.length != dots.length ||
       !old.dots.containsAll(dots) ||
       old.highlights.toString() != highlights.toString();
+}
+
+/// A single arrow between two square centers (e.g. a hint move), lichess-style.
+class _ArrowPainter extends CustomPainter {
+  _ArrowPainter({required this.from, required this.to, required this.width});
+  final Offset from;
+  final Offset to;
+  final double width;
+
+  static const _color = Color(0xE6F5A623);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final direction = to - from;
+    final length = direction.distance;
+    if (length < 1) return;
+    final unit = direction / length;
+    // Stop short of the target square's center so the arrowhead doesn't sit inside the piece.
+    final headLength = width * 2.6;
+    final shaftEnd = to - unit * headLength;
+    final paint = Paint()
+      ..color = _color
+      ..strokeWidth = width
+      ..strokeCap = StrokeCap.round;
+    canvas.drawLine(from, shaftEnd, paint);
+
+    final normal = Offset(-unit.dy, unit.dx);
+    final headBase = to - unit * headLength;
+    final p1 = headBase + normal * (width * 1.4);
+    final p2 = headBase - normal * (width * 1.4);
+    final path = Path()
+      ..moveTo(to.dx, to.dy)
+      ..lineTo(p1.dx, p1.dy)
+      ..lineTo(p2.dx, p2.dy)
+      ..close();
+    canvas.drawPath(path, Paint()..color = _color);
+  }
+
+  @override
+  bool shouldRepaint(_ArrowPainter old) => old.from != from || old.to != to || old.width != width;
 }
 
 /// Square -> piece code (e.g. "e1" -> "wK") from a FEN, without building a full game.

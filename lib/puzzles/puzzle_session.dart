@@ -31,9 +31,27 @@ class PuzzleSession {
   PuzzleStatus status = PuzzleStatus.playing;
   (String, String)? lastMove;
 
+  // 0 = no hint shown for the current move, 1 = source square, 2 = full move as an arrow.
+  // Resets to 0 on each move; maxHintLevel (0-2) is the highest reached in the whole
+  // puzzle and is what the server uses to dampen the rating gain on solve.
+  int _hintLevel = 0;
+  int maxHintLevel = 0;
+
   String get fen => _game.fen;
   bool get whiteToSolve => puzzle.fen.split(' ')[1] == 'w';
-  String? get hint => status == PuzzleStatus.playing ? puzzle.solution[_step].substring(0, 2) : null;
+
+  String? get hintFrom =>
+      status == PuzzleStatus.playing && _hintLevel >= 1 ? puzzle.solution[_step].substring(0, 2) : null;
+  String? get hintTo =>
+      status == PuzzleStatus.playing && _hintLevel >= 2 ? puzzle.solution[_step].substring(2, 4) : null;
+  int get hintLevel => _hintLevel;
+
+  /// First call highlights the source square; second shows the full move as an arrow.
+  void showHint() {
+    if (status != PuzzleStatus.playing) return;
+    _hintLevel = (_hintLevel + 1).clamp(0, 2);
+    if (_hintLevel > maxHintLevel) maxHintLevel = _hintLevel;
+  }
 
   /// Plays the solver's move. Returns false if it's illegal. A legal wrong move fails the
   /// puzzle. If the line continues, call [playReply] to make the opponent's answer.
@@ -52,6 +70,7 @@ class PuzzleSession {
       return true;
     }
     _step++;
+    _hintLevel = 0; // fresh move, fresh hint state (maxHintLevel is untouched)
     if (_step >= puzzle.solution.length) status = PuzzleStatus.solved;
     return true;
   }
@@ -65,6 +84,7 @@ class PuzzleSession {
     _game.move({'from': m.substring(0, 2), 'to': m.substring(2, 4), 'promotion': m.length > 4 ? m[4] : null});
     lastMove = (m.substring(0, 2), m.substring(2, 4));
     _step++;
+    _hintLevel = 0;
     if (_step >= puzzle.solution.length) status = PuzzleStatus.solved;
   }
 }
