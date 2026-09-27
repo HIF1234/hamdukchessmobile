@@ -45,6 +45,7 @@ dependencies:
   firebase_analytics: ^12.6.0
   app_links: ^7.2.1
   share_plus: ^13.3.0
+  firebase_messaging: ^16.7.0
 
 dev_dependencies:
   flutter_test:

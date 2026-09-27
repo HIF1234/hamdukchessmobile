@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 
 import 'core/app_config.dart';
 import 'core/links.dart';
+import 'core/push.dart';
+import 'games/game_screen.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'games/challenge_screens.dart';
 import 'games/play_screen.dart';
 import 'profile/profile_screen.dart';
@@ -20,6 +23,7 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   int _tab = 0;
   StreamSubscription<String>? _links;
+  StreamSubscription<String>? _gameLinks;
 
   @override
   void initState() {
@@ -28,6 +32,17 @@ class _HomeShellState extends State<HomeShell> {
     _links = IncomingLinks.instance.challenges.listen(_openChallenge);
     final pending = IncomingLinks.instance.takePending();
     if (pending != null) WidgetsBinding.instance.addPostFrameCallback((_) => _openChallenge(pending));
+    // Tapped notifications ("Your move", challenge accepted) open their game.
+    _gameLinks = IncomingLinks.instance.games.listen(_openGame);
+    final pendingGame = IncomingLinks.instance.takePendingGame();
+    if (pendingGame != null) WidgetsBinding.instance.addPostFrameCallback((_) => _openGame(pendingGame));
+    Push.start();
+  }
+
+  void _openGame(String id) {
+    final me = Supabase.instance.client.auth.currentUser?.id;
+    if (!mounted || me == null) return;
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => GameScreen(gameId: id, myId: me)));
   }
 
   void _openChallenge(String id) {
@@ -38,6 +53,7 @@ class _HomeShellState extends State<HomeShell> {
   @override
   void dispose() {
     _links?.cancel();
+    _gameLinks?.cancel();
     super.dispose();
   }
 

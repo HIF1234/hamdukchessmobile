@@ -11,6 +11,12 @@ void main() {
       expect(challengeIdFrom(Uri.parse('https://play.chess.hamduk.com.ng/challenge/$id')), id);
     });
 
+    test('game links (from notifications) give the game id', () {
+      expect(gameIdFrom(Uri.parse('https://play.chess.hamduk.com.ng/play/$id')), id);
+      expect(gameIdFrom(Uri.parse('https://play.chess.hamduk.com.ng/challenge/$id')), isNull);
+      expect(gameIdFrom(Uri.parse('https://evil.example.com/play/$id')), isNull);
+    });
+
     test('other pages, other sites and malformed ids are ignored', () {
       expect(challengeIdFrom(Uri.parse('https://play.chess.hamduk.com.ng/play/$id')), isNull);
       expect(challengeIdFrom(Uri.parse('https://evil.example.com/challenge/$id')), isNull);

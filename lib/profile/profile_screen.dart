@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/api.dart';
+import '../core/push.dart';
 import '../core/settings.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -76,7 +77,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           const SizedBox(height: 16),
           OutlinedButton(
-            onPressed: () => Supabase.instance.client.auth.signOut(),
+            onPressed: () async {
+              await Push.stop();
+              await Supabase.instance.client.auth.signOut();
+            },
             child: const Text('Sign out'),
           ),
         ],
