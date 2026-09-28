@@ -5,12 +5,25 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/api.dart';
 import '../core/app_config.dart';
+import '../core/notifications_screen.dart';
 import '../core/settings.dart';
 import '../core/storage.dart';
+import '../core/ui.dart';
 import '../bots/bot_game_screen.dart';
 import '../engine/device.dart';
 import 'challenge_screens.dart';
+import 'game_history_screen.dart';
 import 'game_screen.dart';
+import 'spectate_screen.dart';
+
+/// A small icon per time-control category so the picker reads at a glance instead of as
+/// plain text buttons.
+IconData _categoryIcon(String category) => switch (category) {
+      'bullet' => Icons.flash_on,
+      'blitz' => Icons.bolt,
+      'rapid' => Icons.timer_outlined,
+      _ => Icons.hourglass_empty,
+    };
 
 /// Pick a time control and find an opponent. Works like the website: ask the server every
 /// few seconds, and also listen for our new game so pairing shows the moment it happens.
@@ -226,74 +239,116 @@ class _PlayScreenState extends State<PlayScreen> {
     final t = Theme.of(context);
     final tcs = widget.config.timeControls;
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.zero,
       children: [
-        Text('Play online', style: t.textTheme.headlineSmall),
-        const SizedBox(height: 12),
-        if (_seeking != null)
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(children: [
-                const SizedBox.square(dimension: 20, child: CircularProgressIndicator(strokeWidth: 2)),
-                const SizedBox(width: 12),
-                Expanded(child: Text('Finding a $_seeking opponent…')),
-                TextButton(onPressed: () => _cancel(), child: const Text('Cancel')),
-              ]),
+        TabHeader(
+          title: 'Play',
+          subtitle: 'Find an opponent or train against a bot',
+          trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+            IconButton(
+              icon: const Icon(Icons.notifications_outlined, color: Colors.white),
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NotificationsScreen())),
             ),
-          )
-        else ...[
-          if (_error != null) Padding(padding: const EdgeInsets.only(bottom: 8), child: Text(_error!)),
-          GridView.count(
-            crossAxisCount: 3,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: 8,
-            crossAxisSpacing: 8,
-            childAspectRatio: 1.6,
-            children: [
-              for (final tc in tcs)
-                OutlinedButton(
-                  onPressed: () => _seek(tc['id'] as String),
-                  child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    Text(tc['id'] as String, style: t.textTheme.titleMedium),
-                    Text(tc['category'] as String, style: t.textTheme.bodySmall),
+            IconButton(
+              icon: const Icon(Icons.history, color: Colors.white),
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const GameHistoryScreen())),
+            ),
+          ]),
+        ),
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            if (_seeking != null)
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(children: [
+                    const SizedBox.square(dimension: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                    const SizedBox(width: 12),
+                    Expanded(child: Text('Finding a $_seeking opponent…')),
+                    TextButton(onPressed: () => _cancel(), child: const Text('Cancel')),
                   ]),
                 ),
+              )
+            else ...[
+              const SectionLabel('Play online', icon: Icons.public),
+              if (_error != null) Padding(padding: const EdgeInsets.only(bottom: 8), child: Text(_error!)),
+              GridView.count(
+                crossAxisCount: 3,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                mainAxisSpacing: 10,
+                crossAxisSpacing: 10,
+                childAspectRatio: 1.3,
+                children: [
+                  for (final tc in tcs)
+                    Material(
+                      color: t.colorScheme.surfaceContainerHigh,
+                      borderRadius: BorderRadius.circular(14),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(14),
+                        onTap: () => _seek(tc['id'] as String),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(_categoryIcon(tc['category'] as String), color: t.colorScheme.primary),
+                            const SizedBox(height: 4),
+                            Text(tc['id'] as String, style: t.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                            Text(tc['category'] as String, style: t.textTheme.bodySmall),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ],
-          ),
-        ],
-        const SizedBox(height: 12),
-        OutlinedButton.icon(
-          onPressed: _seeking == null ? _challengeFriend : null,
-          icon: const Icon(Icons.person_add_alt_1),
-          label: const Text('Challenge a friend (WhatsApp link)'),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: _seeking == null ? _challengeFriend : null,
+              icon: const Icon(Icons.person_add_alt_1),
+              label: const Text('Challenge a friend (WhatsApp link)'),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SpectateScreen())),
+              icon: const Icon(Icons.visibility_outlined),
+              label: const Text('Watch live games'),
+            ),
+            const SizedBox(height: 28),
+            const SectionLabel('Naija bots', icon: Icons.smart_toy_outlined),
+            Text(
+              'Play offline, no data needed. Bot games don\'t change your rating.',
+              style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
+            ),
+            if (_lowMemory)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text('The strongest bots are hidden on this phone to keep it smooth.', style: t.textTheme.bodySmall),
+              ),
+            const SizedBox(height: 8),
+            for (final b in widget.config.bots)
+              // The 2400+ bots search deepest; skip them on phones under 3 GB for now (spec §3).
+              if (!(_lowMemory && (b['rating'] as num) >= 2400))
+                Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  child: ListTile(
+                    onTap: b['tier'] == 'plus' && _tier == 'free'
+                        ? () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                              content: Text('This bot is part of Hamduk Plus. Upgrade at play.chess.hamduk.com.ng/billing.')))
+                        : () => _playBot(b),
+                    // Low data mode skips the portraits (about 30 KB each).
+                    leading: AppSettings.instance.lowData
+                        ? CircleAvatar(child: Text((b['name'] as String).substring(0, 1)))
+                        : CircleAvatar(backgroundImage: NetworkImage(b['portraitUrl'] as String)),
+                    title: Text(b['name'] as String, style: const TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: Text('${b['hometown']} · ${b['catchphrase']}'),
+                    trailing: b['tier'] == 'plus' && _tier == 'free'
+                        ? const Icon(Icons.lock_outline)
+                        : StatBadge(label: 'rating', value: '${b['rating']}'),
+                  ),
+                ),
+          ]),
         ),
-        const SizedBox(height: 24),
-        Text('Naija bots', style: t.textTheme.titleMedium),
-        const Text('Play offline, no data needed. Bot games don\'t change your rating.'),
-        if (_lowMemory)
-          Text('The strongest bots are hidden on this phone to keep it smooth.', style: t.textTheme.bodySmall),
-        const SizedBox(height: 8),
-        for (final b in widget.config.bots)
-          // The 2400+ bots search deepest; skip them on phones under 3 GB for now (spec §3).
-          if (!(_lowMemory && (b['rating'] as num) >= 2400))
-          ListTile(
-            onTap: b['tier'] == 'plus' && _tier == 'free'
-                ? () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                      content: Text('This bot is part of Hamduk Plus. Upgrade at play.chess.hamduk.com.ng/billing.')))
-                : () => _playBot(b),
-            contentPadding: EdgeInsets.zero,
-            // Low data mode skips the portraits (about 30 KB each).
-            leading: AppSettings.instance.lowData
-                ? CircleAvatar(child: Text((b['name'] as String).substring(0, 1)))
-                : CircleAvatar(backgroundImage: NetworkImage(b['portraitUrl'] as String)),
-            title: Text(b['name'] as String),
-            subtitle: Text('${b['hometown']} · ${b['catchphrase']}'),
-            trailing: b['tier'] == 'plus' && _tier == 'free'
-                ? const Icon(Icons.lock_outline)
-                : Text('${b['rating']}'),
-          ),
       ],
     );
   }

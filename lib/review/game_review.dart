@@ -147,8 +147,11 @@ ReviewResult buildReview(
     final after = i + 1 < evals.length ? evals[i + 1].$1 : before;
     final sign = p.$5 ? 1 : -1;
     final cpLoss = max(0, (before - after) * sign);
-    // Early moves that lose nothing count as book, but never a checkmate.
-    final isBook = i < 12 && cpLoss < 25 && !p.$3.endsWith('#');
+    // Early moves count as book unless they lose real material/position, never a checkmate.
+    // The threshold is generous (not the ~15cp "best" cutoff) because Stockfish 11's classical
+    // eval is genuinely noisy in the opening — swings of 80-100cp between near-symmetric
+    // positions a few plies apart are normal engine noise here, not an actual mistake.
+    final isBook = i < 12 && cpLoss < 150 && !p.$3.endsWith('#');
     moves.add(MoveReview(
       ply: i + 1,
       san: p.$3,
@@ -180,15 +183,18 @@ Classification classify(int cpLoss, bool isTop) {
 }
 
 /// Lichess-style accuracy from the drop in winning chances, 0-100 (same formula as the site).
+/// Book moves are skipped: they're theory, not something the engine's opening-phase eval
+/// (noisy at this depth) should be allowed to mark down.
 double accuracy(List<MoveReview> moves) {
-  if (moves.isEmpty) return 100;
+  final scored = moves.where((m) => m.classification != Classification.book).toList();
+  if (scored.isEmpty) return 100;
   var sum = 0.0;
-  for (final m in moves) {
+  for (final m in scored) {
     final sign = m.white ? 1 : -1;
     final drop = max(0.0, winPct(m.evalBefore * sign) - winPct(m.evalAfter * sign));
     sum += (103.1668 * exp(-0.04354 * drop) - 3.1669).clamp(0.0, 100.0);
   }
-  return (sum / moves.length * 10).round() / 10;
+  return (sum / scored.length * 10).round() / 10;
 }
 
 /// Centipawns to win percentage from the mover's point of view.

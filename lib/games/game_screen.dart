@@ -91,14 +91,13 @@ class _GameScreenState extends State<GameScreen> {
                 const SizedBox(height: 6),
                 _PlayerRow(controller: c, player: me, white: c.isWhite, presence: null),
                 const SizedBox(height: 8),
-                if (c.pending != null) const _Banner(text: 'Sending your move…'),
-                if (c.opponentPresence == OpponentPresence.abandoned && g.active)
+                if (c.isParticipant && c.opponentPresence == OpponentPresence.abandoned && g.active)
                   _Banner(
                     text: '${opp.username} has been away for over ${disconnectGrace.inSeconds}s.',
                     action: ('Claim the game', c.claimAbandoned),
                     warning: true,
                   ),
-                if (g.active && g.drawOfferBy != null && g.drawOfferBy != widget.myId)
+                if (c.isParticipant && g.active && g.drawOfferBy != null && g.drawOfferBy != widget.myId)
                   _Banner(
                     text: '${opp.username} offers a draw.',
                     action: ('Accept', () => c.answerDraw(true)),
@@ -117,7 +116,7 @@ class _GameScreenState extends State<GameScreen> {
                     icon: const Icon(Icons.analytics_outlined),
                     label: const Text('Review this game'),
                   ),
-                if (g.active)
+                if (c.isParticipant && g.active)
                   Row(children: [
                     OutlinedButton(
                       onPressed: g.drawOfferBy == widget.myId ? null : c.offerDraw,
@@ -125,7 +124,12 @@ class _GameScreenState extends State<GameScreen> {
                     ),
                     const Spacer(),
                     TextButton(onPressed: _confirmResign, child: const Text('Resign')),
-                  ]),
+                  ])
+                else if (!c.isParticipant)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 8),
+                    child: Text('Spectating', textAlign: TextAlign.center),
+                  ),
               ],
             );
           },
@@ -227,12 +231,18 @@ class _Result extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final won = game.winnerId == myId;
-    final text = game.result == 'draw' || game.winnerId == null
-        ? 'Game drawn'
-        : won
-            ? 'You won'
-            : 'You lost';
-    final reason = game.endReason == null ? '' : ' · ${game.endReason}';
+    final text = game.endReason == 'first_move_timeout'
+        ? 'Game aborted'
+        : game.result == 'draw' || game.winnerId == null
+            ? 'Game drawn'
+            : won
+                ? 'You won'
+                : 'You lost';
+    final reason = game.endReason == null
+        ? ''
+        : game.endReason == 'first_move_timeout'
+            ? ' · no first move made in time'
+            : ' · ${game.endReason}';
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: Text('$text$reason', style: Theme.of(context).textTheme.titleLarge, textAlign: TextAlign.center),

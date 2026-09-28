@@ -49,10 +49,15 @@ class GameController extends ChangeNotifier with WidgetsBindingObserver {
   Timer? _tick;
   DateTime? _disconnectedAt;
   bool _flagSent = false;
+  bool _readySent = false;
+  int _firstMoveCheckTicks = 0;
   bool _disposed = false;
 
   bool get isWhite => game?.white.id == myId;
-  bool get myTurn => game != null && game!.active && (game!.whiteToMove == isWhite) && pending == null;
+  bool get isParticipant => game != null && (myId == game!.white.id || myId == game!.black.id);
+  // isParticipant is required here: without it, a spectator (isWhite false, myId matching
+  // neither side) would see myTurn as true whenever it's Black's move, since false == false.
+  bool get myTurn => isParticipant && game!.active && (game!.whiteToMove == isWhite) && pending == null;
   Player? get opponent => game == null ? null : (isWhite ? game!.black : game!.white);
 
   /// What the board shows: the optimistic position while a move is on its way.
@@ -91,6 +96,7 @@ class GameController extends ChangeNotifier with WidgetsBindingObserver {
       error = null;
       _notify();
       _maybePlayPremove();
+      _maybeSendReady();
     } on ApiError catch (e) {
       error = e.isNetwork ? null : e.message;
       _notify();
@@ -114,6 +120,7 @@ class GameController extends ChangeNotifier with WidgetsBindingObserver {
             game = next;
             _notify();
             _maybePlayPremove();
+            _maybeSendReady();
           },
         )
         .onPostgresChanges(
@@ -133,6 +140,19 @@ class GameController extends ChangeNotifier with WidgetsBindingObserver {
         case RealtimeSubscribeStatus.closed:
           _onDisconnected();
       }
+    });
+  }
+
+  /// Tells the server the board has actually rendered, once, if we're White at ply 0. This is
+  /// what starts the first-move no-show clock -- not game creation -- so a slow connection
+  /// gets time to catch up instead of losing the abort race before it's even loaded.
+  void _maybeSendReady() {
+    if (_readySent) return;
+    final g = game;
+    if (g == null || !isWhite || g.ply != 0 || !g.active) return;
+    _readySent = true;
+    Api.instance.post('/games/$gameId/ready').catchError((_) {
+      _readySent = false;
     });
   }
 
@@ -243,6 +263,16 @@ class GameController extends ChangeNotifier with WidgetsBindingObserver {
   void _onTick() {
     final g = game;
     if (g == null || !g.active) return;
+    // Black polls for White's first-move no-show while waiting on ply 0 -- there's no clock
+    // hitting zero yet to key off, so this checks periodically instead (every ~5s: ticks run
+    // at 200ms).
+    if (isParticipant && !isWhite && g.ply == 0) {
+      _firstMoveCheckTicks++;
+      if (_firstMoveCheckTicks >= 25) {
+        _firstMoveCheckTicks = 0;
+        Api.instance.post('/games/$gameId/first-move-timeout').then((_) => reload()).catchError((_) {});
+      }
+    }
     // Opponent away longer than the grace period: they can be claimed.
     if (opponentAwaySince != null &&
         DateTime.now().difference(opponentAwaySince!) >= disconnectGrace &&
@@ -253,7 +283,7 @@ class GameController extends ChangeNotifier with WidgetsBindingObserver {
     // The opponent's clock hit zero: ask the server to end it (it decides).
     final (w, b) = displayClocks(g, now: DateTime.now(), serverOffset: serverOffset);
     final oppMs = isWhite ? b : w;
-    if (!_flagSent && oppMs <= 0 && g.ply >= 2 && !myTurn) {
+    if (isParticipant && !_flagSent && oppMs <= 0 && g.ply >= 2 && !myTurn) {
       _flagSent = true;
       Api.instance.post('/games/$gameId/flag').then((_) => reload()).catchError((_) {
         _flagSent = false;

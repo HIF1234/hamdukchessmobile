@@ -1,0 +1,110 @@
+import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../core/api.dart';
+import '../core/ui.dart';
+import 'public_profile_screen.dart';
+
+const _categories = <(String, String)>[
+  ('bullet', 'Bullet'),
+  ('blitz', 'Blitz'),
+  ('rapid', 'Rapid'),
+  ('classical', 'Classical'),
+];
+
+/// Top players by rating (GET /leaderboard).
+class LeaderboardScreen extends StatefulWidget {
+  const LeaderboardScreen({super.key});
+
+  @override
+  State<LeaderboardScreen> createState() => _LeaderboardScreenState();
+}
+
+class _LeaderboardScreenState extends State<LeaderboardScreen> {
+  String _category = 'blitz';
+  List<Map<String, dynamic>>? _rows;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _rows = null;
+      _error = null;
+    });
+    try {
+      final r = await Api.instance.get('/leaderboard', {'category': _category}) as Map<String, dynamic>;
+      if (mounted) setState(() => _rows = (r['rows'] as List).cast<Map<String, dynamic>>());
+    } on ApiError catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    final myId = Supabase.instance.client.auth.currentUser?.id;
+    final rows = _rows;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Leaderboard')),
+      body: Column(children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: SizedBox(
+            height: 36,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: [
+                for (final (key, label) in _categories)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: ChoiceChip(
+                      label: Text(label),
+                      selected: _category == key,
+                      onSelected: (_) {
+                        setState(() => _category = key);
+                        _load();
+                      },
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: _load,
+            child: rows == null && _error == null
+                ? const Center(child: CircularProgressIndicator())
+                : _error != null
+                    ? Center(child: Text(_error!))
+                    : ListView.builder(
+                        itemCount: rows!.length,
+                        itemBuilder: (context, i) {
+                          final r = rows[i];
+                          final mine = r['user_id'] == myId;
+                          return ListTile(
+                            tileColor: mine ? t.colorScheme.primaryContainer.withValues(alpha: 0.4) : null,
+                            leading: SizedBox(
+                              width: 32,
+                              child: Text('${r['rank']}', style: t.textTheme.titleMedium, textAlign: TextAlign.center),
+                            ),
+                            title: Text(r['username'] as String, style: const TextStyle(fontWeight: FontWeight.bold)),
+                            subtitle: Text('${r['country'] ?? ''} · ${r['games']} games'.trim()),
+                            trailing: StatBadge(label: 'rating', value: '${r['rating']}'),
+                            onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                              builder: (_) => PublicProfileScreen(username: r['username'] as String),
+                            )),
+                          );
+                        },
+                      ),
+          ),
+        ),
+      ]),
+    );
+  }
+}

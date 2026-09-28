@@ -5,6 +5,7 @@ import '../board/chess_board.dart';
 import '../core/api.dart';
 import '../core/settings.dart';
 import '../core/telemetry.dart';
+import '../core/ui.dart';
 import 'puzzle_session.dart';
 import 'puzzle_store.dart';
 
@@ -134,83 +135,94 @@ class _PuzzlesScreenState extends State<PuzzlesScreen> {
     final store = _store;
     final s = _session;
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.zero,
       children: [
-        Row(children: [
-          Text('Puzzles', style: t.textTheme.headlineSmall),
-          const Spacer(),
-          if (store?.rating != null) Text('Rating ${store!.rating}', style: t.textTheme.titleMedium),
-        ]),
-        const SizedBox(height: 8),
-        SizedBox(
-          height: 40,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            children: [
-              for (final (key, label) in puzzleThemes)
-                Padding(
-                  padding: const EdgeInsets.only(right: 6),
-                  child: ChoiceChip(label: Text(label), selected: _theme == key, onSelected: (_) => _pickTheme(key)),
-                ),
-            ],
-          ),
+        TabHeader(
+          title: 'Puzzles',
+          subtitle: 'Rated tactics, solved offline',
+          trailing: store?.rating != null ? StatBadge(label: 'rating', value: '${store!.rating}', light: true) : null,
         ),
-        const SizedBox(height: 4),
-        Text(
-          store == null
-              ? 'Loading…'
-              : '${store.remaining} ready offline'
-                  '${store.pendingUploads > 0 ? ' · ${store.pendingUploads} waiting to upload' : ''}'
-                  '${_syncing ? ' · syncing…' : ''}',
-          style: t.textTheme.bodySmall,
-        ),
-        if (_note != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(_note!)),
-        const SizedBox(height: 12),
-        if (s == null)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 48),
-            child: Column(children: [
-              const Text('No puzzles downloaded yet. Connect to the internet to get a pack.', textAlign: TextAlign.center),
-              const SizedBox(height: 12),
-              FilledButton(onPressed: _sync, child: const Text('Download puzzles')),
-            ]),
-          )
-        else ...[
-          ChessBoardView(
-            key: ValueKey(s.puzzle.id),
-            fen: s.fen,
-            whiteAtBottom: s.whiteToSolve,
-            lastMove: s.lastMove,
-            hintSquare: s.hintFrom,
-            arrow: s.hintTo != null ? (s.hintFrom!, s.hintTo!) : null,
-            onMove: s.status == PuzzleStatus.playing && !s.awaitingReply ? _onMove : null,
-            animate: !AppSettings.instance.lowData,
-          ),
-          const SizedBox(height: 12),
-          Text(
-            switch (s.status) {
-              PuzzleStatus.playing => '${s.whiteToSolve ? 'White' : 'Black'} to play · rated ${s.puzzle.rating}',
-              PuzzleStatus.solved => s.maxHintLevel >= 2
-                  ? 'Solved! No rating gained (move was shown).'
-                  : s.maxHintLevel == 1
-                      ? 'Solved! Reduced rating gain (hint used).'
-                      : 'Solved!',
-              PuzzleStatus.failed => 'Not quite. The best move was ${s.puzzle.solution.first}.',
-            },
-            style: t.textTheme.titleMedium,
-          ),
-          const SizedBox(height: 12),
-          Row(children: [
-            if (s.status == PuzzleStatus.playing)
-              TextButton(
-                onPressed: s.hintLevel >= 2 ? null : () => setState(s.showHint),
-                child: Text(s.hintLevel == 0 ? 'Hint' : 'Show move'),
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            SizedBox(
+              height: 36,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: [
+                  for (final (key, label) in puzzleThemes)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: ChoiceChip(label: Text(label), selected: _theme == key, onSelected: (_) => _pickTheme(key)),
+                    ),
+                ],
               ),
-            const Spacer(),
-            if (s.status != PuzzleStatus.playing)
-              FilledButton(onPressed: () => setState(_nextPuzzle), child: const Text('Next puzzle')),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              store == null
+                  ? 'Loading…'
+                  : '${store.remaining} ready offline'
+                      '${store.pendingUploads > 0 ? ' · ${store.pendingUploads} waiting to upload' : ''}'
+                      '${_syncing ? ' · syncing…' : ''}',
+              style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
+            ),
+            if (_note != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(_note!)),
+            const SizedBox(height: 16),
+            if (s == null)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 48),
+                child: Column(children: [
+                  const Text('No puzzles downloaded yet. Connect to the internet to get a pack.', textAlign: TextAlign.center),
+                  const SizedBox(height: 12),
+                  FilledButton(onPressed: _sync, child: const Text('Download puzzles')),
+                ]),
+              )
+            else ...[
+              Card(
+                clipBehavior: Clip.antiAlias,
+                margin: EdgeInsets.zero,
+                child: Padding(
+                  padding: const EdgeInsets.all(10),
+                  child: ChessBoardView(
+                    key: ValueKey(s.puzzle.id),
+                    fen: s.fen,
+                    whiteAtBottom: s.whiteToSolve,
+                    lastMove: s.lastMove,
+                    hintSquare: s.hintFrom,
+                    arrow: s.hintTo != null ? (s.hintFrom!, s.hintTo!) : null,
+                    onMove: s.status == PuzzleStatus.playing && !s.awaitingReply ? _onMove : null,
+                    animate: !AppSettings.instance.lowData,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                switch (s.status) {
+                  PuzzleStatus.playing => '${s.whiteToSolve ? 'White' : 'Black'} to play · rated ${s.puzzle.rating}',
+                  PuzzleStatus.solved => s.maxHintLevel >= 2
+                      ? 'Solved! No rating gained (move was shown).'
+                      : s.maxHintLevel == 1
+                          ? 'Solved! Reduced rating gain (hint used).'
+                          : 'Solved!',
+                  PuzzleStatus.failed => 'Not quite. The best move was ${s.puzzle.solution.first}.',
+                },
+                style: t.textTheme.titleMedium,
+              ),
+              const SizedBox(height: 12),
+              Row(children: [
+                if (s.status == PuzzleStatus.playing)
+                  TextButton(
+                    onPressed: s.hintLevel >= 2 ? null : () => setState(s.showHint),
+                    child: Text(s.hintLevel == 0 ? 'Hint' : 'Show move'),
+                  ),
+                const Spacer(),
+                if (s.status != PuzzleStatus.playing)
+                  FilledButton(onPressed: () => setState(_nextPuzzle), child: const Text('Next puzzle')),
+              ]),
+            ],
           ]),
-        ],
+        ),
       ],
     );
   }

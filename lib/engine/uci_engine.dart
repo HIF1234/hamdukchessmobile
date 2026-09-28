@@ -52,6 +52,11 @@ class UciEngine {
     if (_search != null) throw StateError('A search is already running');
     _pvs.clear();
     final c = _search = Completer<(String, List<Pv>)>();
+    // Without this, Stockfish's hash table and move-ordering history from the previous
+    // position leak into this search: on a small 16 MB hash they don't just fail to help,
+    // they bias which line gets explored, which can swing the depth-14 eval by 50-100cp on
+    // an unrelated position (seen concretely on 1.e4 e5 review scores). ucinewgame resets both.
+    _send('ucinewgame');
     _send('setoption name MultiPV value $multiPv');
     _send('position fen $fen');
     _send('go depth $depth movetime $movetimeMs');

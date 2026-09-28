@@ -14,11 +14,10 @@ import 'core/app_config.dart';
 import 'core/links.dart';
 import 'core/settings.dart';
 import 'core/telemetry.dart';
+import 'core/theme.dart';
 import 'firebase_options.dart';
 import 'home_shell.dart';
-
-const brandGreen = Color(0xFF22A05A);
-const brandGold = Color(0xFFF5B82E);
+import 'onboarding/onboarding_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -35,6 +34,7 @@ Future<void> main() async {
   _registerLicenses();
   await AppSettings.instance.load();
   final config = await AppConfig.load();
+  final seenOnboarding = await hasSeenOnboarding();
   if (config != null) {
     await Supabase.initialize(url: config.supabaseUrl, publishableKey: config.supabaseAnonKey);
     final auth = Supabase.instance.client.auth;
@@ -44,7 +44,7 @@ Future<void> main() async {
   }
   unawaited(IncomingLinks.instance.start());
   AppLifecycleListener(onPause: () => Telemetry.sessionData(bytes: DataMeter.bytes, since: DataMeter.started));
-  runApp(HamdukChessApp(config: config));
+  runApp(HamdukChessApp(config: config, showOnboarding: !seenOnboarding));
 }
 
 /// Adds Stockfish and the piece set to the app's licences screen (Profile → About & licences).
@@ -68,9 +68,17 @@ Copyright (c) 2022 Ryan Gregory.''');
   });
 }
 
-class HamdukChessApp extends StatelessWidget {
-  const HamdukChessApp({super.key, required this.config});
+class HamdukChessApp extends StatefulWidget {
+  const HamdukChessApp({super.key, required this.config, this.showOnboarding = false});
   final AppConfig? config;
+  final bool showOnboarding;
+
+  @override
+  State<HamdukChessApp> createState() => _HamdukChessAppState();
+}
+
+class _HamdukChessAppState extends State<HamdukChessApp> {
+  late bool _showOnboarding = widget.showOnboarding;
 
   @override
   Widget build(BuildContext context) {
@@ -78,12 +86,17 @@ class HamdukChessApp extends StatelessWidget {
           useMaterial3: true,
           colorScheme: ColorScheme.fromSeed(seedColor: brandGreen, brightness: b, primary: brandGreen),
         );
+    final config = widget.config;
     return MaterialApp(
       title: 'Hamduk Chess',
       debugShowCheckedModeBanner: false,
       theme: theme(Brightness.light),
       darkTheme: theme(Brightness.dark),
-      home: config == null ? const _FirstRunOffline() : _AuthGate(config: config!),
+      home: config == null
+          ? const _FirstRunOffline()
+          : _showOnboarding
+              ? OnboardingScreen(onDone: () => setState(() => _showOnboarding = false))
+              : _AuthGate(config: config),
     );
   }
 }
