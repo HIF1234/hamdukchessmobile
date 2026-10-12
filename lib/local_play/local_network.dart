@@ -31,6 +31,22 @@ const localTournamentPort = 44441;
 ///   host -> all     {type: "standings", rows: [{id, username, points, games}]}
 ///   host -> client  {type: "opponent_left", gameId}      -- your opponent's connection dropped
 ///   host -> client  {type: "opponent_back", gameId}      -- they reconnected; carry on
+///   host -> pair    {type: "clock", gameId, whiteMs, blackMs} -- once a second while a game is live
+
+/// Minutes+increment, e.g. "5+0" or "3+2" -- the same shorthand used elsewhere in the app.
+(int baseMs, int incrementMs) parseTimeControl(String timeControl) {
+  final parts = timeControl.split('+');
+  final minutes = int.tryParse(parts[0]) ?? 5;
+  final increment = parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0;
+  return (minutes * 60 * 1000, increment * 1000);
+}
+
+class _GameClock {
+  _GameClock(this.whiteMs, this.blackMs, this.incrementMs);
+  int whiteMs;
+  int blackMs;
+  final int incrementMs;
+}
 
 typedef LocalMessage = Map<String, dynamic>;
 
@@ -50,6 +66,8 @@ class LocalTournamentHost {
   // gameId -> (whiteUsername, blackUsername)
   final _games = <String, (String, String)>{};
   final _boards = <String, ch.Chess>{};
+  final _clocks = <String, _GameClock>{};
+  Timer? _ticker;
   // Both players independently detect checkmate/stalemate and may each report a result (and a
   // resignation is reported by just one side) -- only the first report per game counts.
   final _resolvedGames = <String>{};
@@ -76,7 +94,50 @@ class LocalTournamentHost {
         WebSocketTransformer.upgrade(req).then(_onClientConnected);
       }
     });
+    // The host is the sole authority on time, same as the server is for online games -- clients
+    // never count down on their own, they just display whatever the host last broadcast.
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
     return ip;
+  }
+
+  void _tick() {
+    for (final gameId in _clocks.keys.toList()) {
+      if (_resolvedGames.contains(gameId)) {
+        _clocks.remove(gameId);
+        continue;
+      }
+      final clock = _clocks[gameId]!;
+      final board = _boards[gameId]!;
+      final whiteToMove = board.turn == ch.Color.WHITE;
+      if (whiteToMove) {
+        clock.whiteMs = (clock.whiteMs - 1000).clamp(0, 1 << 30);
+      } else {
+        clock.blackMs = (clock.blackMs - 1000).clamp(0, 1 << 30);
+      }
+      final game = _games[gameId];
+      if (game == null) continue;
+      final (whiteId, blackId) = game;
+      if (clock.whiteMs <= 0 || clock.blackMs <= 0) {
+        _flagOut(gameId, whiteId, blackId, clock.whiteMs <= 0 ? 'black' : 'white');
+        continue;
+      }
+      final payload = {'type': 'clock', 'gameId': gameId, 'whiteMs': clock.whiteMs, 'blackMs': clock.blackMs};
+      final white = _players[whiteId];
+      final black = _players[blackId];
+      if (white != null) _send(white.socket, payload);
+      if (black != null) _send(black.socket, payload);
+    }
+  }
+
+  void _flagOut(String gameId, String whiteId, String blackId, String result) {
+    if (!_resolvedGames.add(gameId)) return;
+    _clocks.remove(gameId);
+    if (!_resultsController.isClosed) _resultsController.add((gameId, whiteId, blackId, result));
+    final payload = {'type': 'result', 'gameId': gameId, 'result': result};
+    final white = _players[whiteId];
+    final black = _players[blackId];
+    if (white != null) _send(white.socket, payload);
+    if (black != null) _send(black.socket, payload);
   }
 
   void _onClientConnected(WebSocket socket) {
@@ -123,6 +184,7 @@ class LocalTournamentHost {
       final me = _players[username];
       final opponent = _players[opponentName];
       final board = _boards[entry.key];
+      final clock = _clocks[entry.key];
       if (me != null && board != null) {
         _send(me.socket, {
           'type': 'pairing',
@@ -130,6 +192,8 @@ class LocalTournamentHost {
           'color': isWhite ? 'white' : 'black',
           'opponent': opponentName,
           'fen': board.fen,
+          'whiteMs': clock?.whiteMs,
+          'blackMs': clock?.blackMs,
         });
       }
       if (opponent != null) _send(opponent.socket, {'type': 'opponent_back', 'gameId': entry.key});
@@ -159,7 +223,16 @@ class LocalTournamentHost {
       final uci = msg['uci'] as String?;
       final board = _boards[gameId];
       if (uci != null && board != null && uci.length >= 4) {
+        final moverWasWhite = board.turn == ch.Color.WHITE;
         board.move({'from': uci.substring(0, 2), 'to': uci.substring(2, 4), 'promotion': uci.length > 4 ? uci[4] : null});
+        final clock = _clocks[gameId];
+        if (clock != null && clock.incrementMs > 0) {
+          if (moverWasWhite) {
+            clock.whiteMs += clock.incrementMs;
+          } else {
+            clock.blackMs += clock.incrementMs;
+          }
+        }
       }
     }
     if (msg['type'] == 'result' && _resolvedGames.add(gameId!) && !_resultsController.isClosed) {
@@ -181,17 +254,35 @@ class LocalTournamentHost {
     }
   }
 
-  /// Pairs two connected players for a new game, telling each their color and opponent name.
-  /// Returns the new game's id.
-  String startGame(String whiteId, String blackId, {String fen = kStartFen}) {
+  /// Pairs two connected players for a new game, telling each their color, opponent name and
+  /// starting clock. Returns the new game's id.
+  String startGame(String whiteId, String blackId, {String fen = kStartFen, String timeControl = '5+0'}) {
     final gameId = 'g${++_gameCounter}';
     _games[gameId] = (whiteId, blackId);
     _boards[gameId] = ch.Chess.fromFEN(fen, check_validity: false);
+    final (baseMs, incMs) = parseTimeControl(timeControl);
+    _clocks[gameId] = _GameClock(baseMs, baseMs, incMs);
     final white = _players[whiteId];
     final black = _players[blackId];
     if (white != null && black != null) {
-      _send(white.socket, {'type': 'pairing', 'gameId': gameId, 'color': 'white', 'opponent': black.username, 'fen': fen});
-      _send(black.socket, {'type': 'pairing', 'gameId': gameId, 'color': 'black', 'opponent': white.username, 'fen': fen});
+      _send(white.socket, {
+        'type': 'pairing',
+        'gameId': gameId,
+        'color': 'white',
+        'opponent': black.username,
+        'fen': fen,
+        'whiteMs': baseMs,
+        'blackMs': baseMs,
+      });
+      _send(black.socket, {
+        'type': 'pairing',
+        'gameId': gameId,
+        'color': 'black',
+        'opponent': white.username,
+        'fen': fen,
+        'whiteMs': baseMs,
+        'blackMs': baseMs,
+      });
     }
     return gameId;
   }
@@ -215,6 +306,7 @@ class LocalTournamentHost {
   }
 
   Future<void> stop() async {
+    _ticker?.cancel();
     for (final p in players) {
       await p.socket.close();
     }

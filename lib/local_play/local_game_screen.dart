@@ -22,12 +22,18 @@ class LocalGameScreen extends StatefulWidget {
     required this.messages,
     required this.sendMove,
     required this.sendResult,
+    this.initialWhiteMs,
+    this.initialBlackMs,
   });
   final String gameId;
   final bool playWhite;
   final String opponentName;
   final String fen;
   final Stream<LocalMessage> messages;
+  /// Null when the host wasn't tracking a clock for this game (shouldn't happen in practice,
+  /// but the board still works untimed if so).
+  final int? initialWhiteMs;
+  final int? initialBlackMs;
   final void Function(String uci) sendMove;
   final void Function(String result) sendResult;
 
@@ -42,6 +48,8 @@ class _LocalGameScreenState extends State<LocalGameScreen> {
   String? _over;
   bool _myConnectionLost = false;
   bool _opponentAway = false; // their socket dropped, but the host kept the game -- might resume
+  late int? _whiteMs = widget.initialWhiteMs;
+  late int? _blackMs = widget.initialBlackMs;
 
   @override
   void initState() {
@@ -76,6 +84,17 @@ class _LocalGameScreenState extends State<LocalGameScreen> {
         if (mounted && _over == null) setState(() => _opponentAway = true);
       case 'opponent_back':
         if (mounted && _over == null) setState(() => _opponentAway = false);
+      case 'clock':
+        if (mounted) {
+          setState(() {
+            _whiteMs = msg['whiteMs'] as int?;
+            _blackMs = msg['blackMs'] as int?;
+          });
+        }
+      case 'result':
+        // The host flagged someone out on time (we didn't detect it locally since only the
+        // host's clock is authoritative) -- show the result it decided.
+        if (mounted && _over == null) _finish(msg['result'] as String, 'time');
     }
   }
 
@@ -137,6 +156,13 @@ class _LocalGameScreenState extends State<LocalGameScreen> {
           padding: const EdgeInsets.all(12),
           children: [
             Text('Local tournament · no data used', style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant)),
+            if (_whiteMs != null && _blackMs != null) ...[
+              const SizedBox(height: 8),
+              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                _ClockChip(label: widget.playWhite ? 'You' : widget.opponentName, ms: _whiteMs!, active: _game.turn == ch.Color.WHITE && _over == null),
+                _ClockChip(label: !widget.playWhite ? 'You' : widget.opponentName, ms: _blackMs!, active: _game.turn == ch.Color.BLACK && _over == null),
+              ]),
+            ],
             const SizedBox(height: 8),
             ChessBoardView(
               fen: _game.fen,
@@ -169,6 +195,38 @@ class _LocalGameScreenState extends State<LocalGameScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _ClockChip extends StatelessWidget {
+  const _ClockChip({required this.label, required this.ms, required this.active});
+  final String label;
+  final int ms;
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    final totalSec = (ms / 1000).ceil().clamp(0, 1 << 30);
+    final mm = totalSec ~/ 60;
+    final ss = totalSec % 60;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: active ? t.colorScheme.primaryContainer : t.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+        Text(label, style: t.textTheme.labelSmall?.copyWith(color: active ? t.colorScheme.onPrimaryContainer : t.colorScheme.onSurfaceVariant)),
+        Text(
+          '${mm.toString().padLeft(1, '0')}:${ss.toString().padLeft(2, '0')}',
+          style: t.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: active ? t.colorScheme.onPrimaryContainer : t.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ]),
     );
   }
 }

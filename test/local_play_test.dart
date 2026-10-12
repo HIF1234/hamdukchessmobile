@@ -153,6 +153,94 @@ void main() {
     );
   });
 
+  group('LocalTournamentHost clock', () {
+    late LocalTournamentHost host;
+    String? ip;
+
+    setUp(() async {
+      host = LocalTournamentHost();
+      ip = await host.start();
+    });
+
+    tearDown(() => host.stop());
+
+    test('broadcasts a tick roughly every second, counting down whoever is to move', () async {
+      if (ip == null) return;
+      final white = LocalTournamentClient();
+      final black = LocalTournamentClient();
+      await white.connect(ip!, 'w');
+      await black.connect(ip!, 'b');
+      await Future.delayed(const Duration(milliseconds: 150));
+      final gameId = host.startGame('w', 'b', timeControl: '1+0'); // 60_000ms each
+
+      final firstTick = white.messages.firstWhere((m) => m['type'] == 'clock');
+      final tick = await firstTick.timeout(const Duration(seconds: 3));
+      expect(tick['gameId'], gameId);
+      // White is to move first, so only White's clock should have ticked down.
+      expect(tick['whiteMs'], lessThan(60000));
+      expect(tick['blackMs'], 60000);
+
+      await white.disconnect();
+      await black.disconnect();
+    });
+
+    test('a move adds the increment to the mover\'s clock', () async {
+      if (ip == null) return;
+      final white = LocalTournamentClient();
+      final black = LocalTournamentClient();
+      await white.connect(ip!, 'w');
+      await black.connect(ip!, 'b');
+      await Future.delayed(const Duration(milliseconds: 150));
+      final gameId = host.startGame('w', 'b', timeControl: '1+5'); // +5s per move
+
+      final blackTick = black.messages.firstWhere((m) => m['type'] == 'clock' && (m['whiteMs'] as int) > 60000);
+      white.send({'type': 'move', 'gameId': gameId, 'uci': 'e2e4'});
+      final tick = await blackTick.timeout(const Duration(seconds: 3));
+      // 60_000 base, +5_000 increment, minus however many whole seconds have ticked by.
+      expect(tick['whiteMs'], greaterThan(60000));
+      expect(tick['whiteMs'], lessThanOrEqualTo(65000));
+
+      await white.disconnect();
+      await black.disconnect();
+    });
+
+    test('flags the player out of time and reports the result to both sides', () async {
+      if (ip == null) return;
+      final white = LocalTournamentClient();
+      final black = LocalTournamentClient();
+      await white.connect(ip!, 'w');
+      await black.connect(ip!, 'b');
+      await Future.delayed(const Duration(milliseconds: 150));
+
+      final whiteFlagged = white.messages.firstWhere((m) => m['type'] == 'result');
+      final blackFlagged = black.messages.firstWhere((m) => m['type'] == 'result');
+      final results = <(String, String, String, String)>[];
+      host.results.listen(results.add);
+
+      final gameId = host.startGame('w', 'b', timeControl: '0+0'); // flags on the very first tick
+      final wMsg = await whiteFlagged.timeout(const Duration(seconds: 3));
+      final bMsg = await blackFlagged.timeout(const Duration(seconds: 3));
+      expect(wMsg['gameId'], gameId);
+      expect(wMsg['result'], 'black'); // White ran out, Black wins
+      expect(bMsg['result'], 'black');
+
+      await Future.delayed(const Duration(milliseconds: 50));
+      expect(results, hasLength(1));
+      expect(results.first.$4, 'black');
+
+      await white.disconnect();
+      await black.disconnect();
+    });
+  });
+
+  group('parseTimeControl', () {
+    test('parses minutes and increment', () {
+      expect(parseTimeControl('5+0'), (300000, 0));
+      expect(parseTimeControl('3+2'), (180000, 2000));
+      expect(parseTimeControl('1+0'), (60000, 0));
+    });
+  });
+
   group('pairRound', () {
     test('pairs an even number of players by score, strongest meeting strongest', () {
       final a = LocalStanding('a', 'Ade')..points = 2;

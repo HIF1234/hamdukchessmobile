@@ -29,6 +29,7 @@ class _HostLocalTournamentScreenState extends State<HostLocalTournamentScreen> {
   final _activePairings = <String, Pairing>{};
   StreamSubscription? _lobbySub;
   StreamSubscription? _resultsSub;
+  String _timeControl = '5+0';
 
   @override
   void initState() {
@@ -75,7 +76,7 @@ class _HostLocalTournamentScreenState extends State<HostLocalTournamentScreen> {
         applyResult(_standings, p.whiteId, null, 'bye');
         continue;
       }
-      final gameId = _host.startGame(p.whiteId, p.blackId!);
+      final gameId = _host.startGame(p.whiteId, p.blackId!, timeControl: _timeControl);
       setState(() => _activePairings[gameId] = p);
     }
   }
@@ -117,6 +118,17 @@ class _HostLocalTournamentScreenState extends State<HostLocalTournamentScreen> {
                     const SizedBox(height: 8),
                     Center(child: Text(_ip!, style: t.textTheme.labelLarge)),
                     const SizedBox(height: 24),
+                    if (_round == 0) ...[
+                      const SectionLabel('Time control', icon: Icons.timer_outlined),
+                      Wrap(
+                        spacing: 8,
+                        children: [
+                          for (final tc in const ['3+0', '5+0', '10+0', '5+3'])
+                            ChoiceChip(label: Text(tc), selected: _timeControl == tc, onSelected: (_) => setState(() => _timeControl = tc)),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+                    ],
                     SectionLabel(_round == 0 ? 'Lobby (${_lobby.length})' : 'Round $_round', icon: Icons.people_outline),
                     if (_lobby.isEmpty)
                       Text('Waiting for players to join…', style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurfaceVariant))

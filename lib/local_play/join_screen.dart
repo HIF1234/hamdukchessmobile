@@ -66,6 +66,8 @@ class _JoinLocalTournamentScreenState extends State<JoinLocalTournamentScreen> {
             playWhite: msg['color'] == 'white',
             opponentName: msg['opponent'] as String? ?? 'Opponent',
             fen: msg['fen'] as String? ?? kStartFen,
+            initialWhiteMs: msg['whiteMs'] as int?,
+            initialBlackMs: msg['blackMs'] as int?,
             messages: _client.messages,
             sendMove: (uci) => _client.send({'type': 'move', 'gameId': msg['gameId'], 'uci': uci}),
             sendResult: (result) => _client.send({'type': 'result', 'gameId': msg['gameId'], 'result': result}),
