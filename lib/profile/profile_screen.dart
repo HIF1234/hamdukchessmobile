@@ -6,6 +6,7 @@ import '../core/push.dart';
 import '../core/settings.dart';
 import '../core/ui.dart';
 import 'leaderboard_screen.dart';
+import 'subscription_sheet.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -46,7 +47,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         children: [
           TabHeader(
             title: username,
-            subtitle: account != null ? '${account['tier']} · ${account['country'] ?? 'Unknown'}'.toUpperCase() : null,
+            subtitle: account != null ? '${account['country'] ?? 'Unknown'}'.toUpperCase() : null,
             trailing: CircleAvatar(
               radius: 26,
               backgroundColor: Colors.white24,
@@ -60,6 +61,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
             padding: const EdgeInsets.all(16),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               if (_error != null) Padding(padding: const EdgeInsets.only(bottom: 12), child: Text(_error!)),
+              if (account != null) ...[
+                _SubscriptionRow(
+                  tier: account['tier'] as String? ?? 'free',
+                  onTap: () async {
+                    await showSubscriptionSheet(context, account['tier'] as String? ?? 'free');
+                    await _load();
+                  },
+                ),
+                const SizedBox(height: 20),
+              ],
               if (puzzles != null || ratings.isNotEmpty) ...[
                 const SectionLabel('Ratings', icon: Icons.trending_up),
                 GridView.count(
@@ -127,6 +138,40 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ]),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SubscriptionRow extends StatelessWidget {
+  const _SubscriptionRow({required this.tier, required this.onTap});
+  final String tier;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isFree = tier == 'free';
+    return Card(
+      margin: EdgeInsets.zero,
+      color: isFree ? null : theme.colorScheme.primaryContainer,
+      child: ListTile(
+        leading: Icon(
+          isFree ? Icons.workspace_premium_outlined : Icons.workspace_premium,
+          color: isFree ? theme.colorScheme.primary : theme.colorScheme.onPrimaryContainer,
+        ),
+        title: Text(
+          isFree ? 'Free plan' : '${tier[0].toUpperCase()}${tier.substring(1)} plan',
+          style: TextStyle(fontWeight: FontWeight.bold, color: isFree ? null : theme.colorScheme.onPrimaryContainer),
+        ),
+        subtitle: Text(
+          isFree ? 'Upgrade for unlimited puzzles and more' : 'Tap to manage your subscription',
+          style: TextStyle(color: isFree ? null : theme.colorScheme.onPrimaryContainer.withValues(alpha: 0.8)),
+        ),
+        trailing: isFree
+            ? FilledButton.tonal(onPressed: onTap, child: const Text('Upgrade'))
+            : Icon(Icons.chevron_right, color: theme.colorScheme.onPrimaryContainer),
+        onTap: onTap,
       ),
     );
   }
