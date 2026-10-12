@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../coaching/coaches_screen.dart';
+import '../coaching/my_sessions_screen.dart';
 import '../core/api.dart';
 import '../core/push.dart';
 import '../core/settings.dart';
@@ -101,6 +103,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LeaderboardScreen())),
                 icon: const Icon(Icons.leaderboard_outlined),
                 label: const Text('Leaderboard'),
+              ),
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CoachesScreen())),
+                icon: const Icon(Icons.school_outlined),
+                label: const Text('Find a coach'),
+              ),
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MySessionsScreen())),
+                icon: const Icon(Icons.event_available_outlined),
+                label: const Text('My coaching sessions'),
               ),
               const SizedBox(height: 20),
               const SectionLabel('Settings', icon: Icons.settings_outlined),
