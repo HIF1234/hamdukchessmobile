@@ -54,3 +54,9 @@ app.*.map.json
 /engine/Stockfish-sf_11/
 /engine/sf_11.tar.gz
 /engine/host/
+
+# Release signing: the upload keystore is this app's permanent Play Store identity.
+# Never commit it. Back the .jks file and key.properties up somewhere safe (password
+# manager / offline storage) -- losing them makes future Play Store updates very painful.
+/android/key.properties
+/android/keystore/
