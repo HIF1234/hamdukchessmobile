@@ -145,6 +145,8 @@ class _PuzzlesScreenState extends State<PuzzlesScreen> {
         Padding(
           padding: const EdgeInsets.all(16),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            RatingLadder(rating: store?.rating),
+            const SizedBox(height: 16),
             SizedBox(
               height: 36,
               child: ListView(

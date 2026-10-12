@@ -6,6 +6,7 @@ import '../coaching/my_sessions_screen.dart';
 import '../core/api.dart';
 import '../core/push.dart';
 import '../core/settings.dart';
+import '../core/theme.dart';
 import '../core/ui.dart';
 import 'leaderboard_screen.dart';
 import 'subscription_sheet.dart';
@@ -50,6 +51,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
           TabHeader(
             title: username,
             subtitle: account != null ? '${account['country'] ?? 'Unknown'}'.toUpperCase() : null,
+            badges: [
+              if ((puzzles?['current_streak'] as num?) != null && (puzzles!['current_streak'] as num) > 0)
+                HeaderBadge(icon: Icons.local_fire_department, label: '${puzzles['current_streak']} day streak', color: Colors.orangeAccent),
+              if (account != null && account['tier'] != 'free')
+                HeaderBadge(icon: Icons.workspace_premium, label: '${account['tier']}'.toUpperCase(), color: brandGold),
+            ],
             trailing: CircleAvatar(
               radius: 26,
               backgroundColor: Colors.white24,
