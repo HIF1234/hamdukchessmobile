@@ -98,6 +98,59 @@ void main() {
       await Future.delayed(const Duration(milliseconds: 150));
       expect(host.players, isEmpty);
     });
+
+    test('rejects a username that is currently connected', () async {
+      if (ip == null) return;
+      final first = LocalTournamentClient();
+      await first.connect(ip!, 'dupe');
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      final second = LocalTournamentClient();
+      final rejected = second.messages.firstWhere((m) => m['type'] == 'name_taken');
+      await second.connect(ip!, 'dupe');
+      await expectLater(rejected.timeout(const Duration(seconds: 2)), completes);
+
+      await first.disconnect();
+      await second.disconnect();
+    });
+
+    test(
+      'a player who drops mid-game gets the current position back on reconnect, and their '
+      'opponent is told they left and then came back',
+      () async {
+        if (ip == null) return;
+        final white = LocalTournamentClient();
+        final black = LocalTournamentClient();
+        await white.connect(ip!, 'w');
+        await black.connect(ip!, 'b');
+        await Future.delayed(const Duration(milliseconds: 150));
+        final gameId = host.startGame('w', 'b');
+        await Future.delayed(const Duration(milliseconds: 50));
+
+        // White plays e4; the host now has a board that isn't the start position any more.
+        white.send({'type': 'move', 'gameId': gameId, 'uci': 'e2e4'});
+        await Future.delayed(const Duration(milliseconds: 100));
+
+        final blackToldLeft = black.messages.firstWhere((m) => m['type'] == 'opponent_left');
+        await white.disconnect();
+        final leftMsg = await blackToldLeft.timeout(const Duration(seconds: 2));
+        expect(leftMsg['gameId'], gameId);
+
+        // White reconnects with the same username -- should get the post-e4 position back.
+        final whiteAgain = LocalTournamentClient();
+        final resumed = whiteAgain.messages.firstWhere((m) => m['type'] == 'pairing');
+        final blackToldBack = black.messages.firstWhere((m) => m['type'] == 'opponent_back');
+        await whiteAgain.connect(ip!, 'w');
+        final resumedMsg = await resumed.timeout(const Duration(seconds: 2));
+        expect(resumedMsg['gameId'], gameId);
+        expect(resumedMsg['color'], 'white');
+        expect(resumedMsg['fen'], isNot(kStartFen)); // reflects the e4 already played
+        await blackToldBack.timeout(const Duration(seconds: 2));
+
+        await whiteAgain.disconnect();
+        await black.disconnect();
+      },
+    );
   });
 
   group('pairRound', () {

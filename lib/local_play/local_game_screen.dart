@@ -40,7 +40,8 @@ class _LocalGameScreenState extends State<LocalGameScreen> {
   StreamSubscription<LocalMessage>? _sub;
   (String, String)? _last;
   String? _over;
-  bool _opponentLeft = false;
+  bool _myConnectionLost = false;
+  bool _opponentAway = false; // their socket dropped, but the host kept the game -- might resume
 
   @override
   void initState() {
@@ -55,7 +56,13 @@ class _LocalGameScreenState extends State<LocalGameScreen> {
   }
 
   void _onMessage(LocalMessage msg) {
-    if (msg['gameId'] != widget.gameId && msg['type'] != 'disconnected' && msg['type'] != 'bye') return;
+    if (msg['type'] == 'disconnected') {
+      // My own connection to the host dropped -- re-joining happens from the lobby screen, not
+      // here, so just stop accepting moves and let the player back out.
+      if (mounted && _over == null) setState(() => _myConnectionLost = true);
+      return;
+    }
+    if (msg['gameId'] != widget.gameId) return;
     switch (msg['type']) {
       case 'move':
         final uci = msg['uci'] as String;
@@ -65,14 +72,15 @@ class _LocalGameScreenState extends State<LocalGameScreen> {
           _last = (uci.substring(0, 2), uci.substring(2, 4));
         });
         _checkEnd();
-      case 'disconnected':
-      case 'bye':
-        if (mounted && _over == null) setState(() => _opponentLeft = true);
+      case 'opponent_left':
+        if (mounted && _over == null) setState(() => _opponentAway = true);
+      case 'opponent_back':
+        if (mounted && _over == null) setState(() => _opponentAway = false);
     }
   }
 
   bool _onMove(String from, String to, String? promo) {
-    if (_over != null || _opponentLeft) return false;
+    if (_over != null || _opponentAway || _myConnectionLost) return false;
     final whiteToMove = _game.turn == ch.Color.WHITE;
     if (whiteToMove != widget.playWhite) return false; // not this player's turn
     if (!_game.move({'from': from, 'to': to, 'promotion': promo ?? 'q'})) return false;
@@ -135,14 +143,20 @@ class _LocalGameScreenState extends State<LocalGameScreen> {
               whiteAtBottom: widget.playWhite,
               playerColor: widget.playWhite ? 'w' : 'b',
               lastMove: _last,
-              onMove: _over == null && !_opponentLeft ? _onMove : null,
+              onMove: _over == null && !_opponentAway && !_myConnectionLost ? _onMove : null,
               animate: !AppSettings.instance.lowData,
             ),
             const SizedBox(height: 12),
-            if (_opponentLeft && _over == null) ...[
-              Text('${widget.opponentName} left the game.', style: t.textTheme.titleMedium, textAlign: TextAlign.center),
+            if (_myConnectionLost && _over == null) ...[
+              Text('Connection to the host lost.', style: t.textTheme.titleMedium, textAlign: TextAlign.center),
               const SizedBox(height: 8),
               FilledButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Back to lobby')),
+            ] else if (_opponentAway && _over == null) ...[
+              Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                const SizedBox(width: 10),
+                Text('${widget.opponentName} disconnected -- waiting for them to reconnect…', style: t.textTheme.bodyMedium),
+              ]),
             ] else if (_over != null) ...[
               Text(_over!, style: t.textTheme.titleLarge, textAlign: TextAlign.center),
               const SizedBox(height: 8),

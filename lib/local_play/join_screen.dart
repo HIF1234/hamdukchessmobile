@@ -73,6 +73,8 @@ class _JoinLocalTournamentScreenState extends State<JoinLocalTournamentScreen> {
         ));
       case 'disconnected':
         if (mounted) setState(() => _error = 'Lost connection to the host.');
+      case 'name_taken':
+        if (mounted) setState(() => _error = 'Someone is already connected with your username. Ask them to rejoin, then try again.');
     }
   }
 
