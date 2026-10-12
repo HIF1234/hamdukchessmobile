@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/api.dart';
 import '../core/ui.dart';
+import '../local_play/local_tournament_home_screen.dart';
 import 'tournament_detail_screen.dart';
 
 /// Tournaments main tab: live, scheduled and completed events (GET /tournaments).
@@ -54,6 +55,19 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
         padding: EdgeInsets.zero,
         children: [
           const TabHeader(title: 'Tournaments', subtitle: 'Swiss and Arena events, live standings'),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            child: Card(
+              margin: EdgeInsets.zero,
+              child: ListTile(
+                leading: const Icon(Icons.wifi_tethering),
+                title: const Text('Play without data'),
+                subtitle: const Text('Host or join a local tournament over WiFi -- no internet needed'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LocalTournamentHomeScreen())),
+              ),
+            ),
+          ),
           if (rows == null && _error == null)
             const Padding(padding: EdgeInsets.all(32), child: Center(child: CircularProgressIndicator())),
           if (_error != null)

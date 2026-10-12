@@ -1,4 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- The local-WiFi (data-free) tournament feature runs a raw socket server/client on the
+         phone's hotspot LAN (INTERNET covers local sockets too, despite the name). CAMERA is
+         for scanning the host's QR code to join. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.CAMERA" />
     <application
         android:label="Hamduk Chess"
         android:name="${applicationName}"

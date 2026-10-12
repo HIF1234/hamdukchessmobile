@@ -26,6 +26,10 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Hamduk Chess connects to other players' phones on the same WiFi hotspot to run data-free local tournaments.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Hamduk Chess uses the camera to scan a host's QR code to join a local tournament.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
