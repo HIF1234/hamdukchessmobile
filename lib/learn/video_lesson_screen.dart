@@ -51,9 +51,17 @@ class _VideoLessonScreenState extends State<VideoLessonScreen> {
         }
     }
     if (url == null || !mounted) return;
-    final controller = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..loadRequest(Uri.parse(url));
+    final WebViewController controller;
+    try {
+      controller = WebViewController()
+        ..setJavaScriptMode(JavaScriptMode.unrestricted)
+        ..loadRequest(Uri.parse(url));
+    } catch (e) {
+      // No platform WebView implementation registered (e.g. a plain widget test, or a device
+      // without WebView support) -- fail into the error state rather than crash the screen.
+      if (mounted) setState(() => _error = 'Video playback isn\'t available on this device.');
+      return;
+    }
     setState(() => _controller = controller);
     // Rough watch-time tracking: a lesson counts as "started" once opened, "completed" after a
     // plausible watch duration. There's no cross-player API to read exact position from an
