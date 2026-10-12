@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/api.dart';
 import '../games/game_screen.dart';
+import '../social/conversation_screen.dart';
 
 /// Another player's public profile: rank, ratings and recent games (GET /profile/{username}).
 class PublicProfileScreen extends StatefulWidget {
@@ -15,7 +16,9 @@ class PublicProfileScreen extends StatefulWidget {
 
 class _PublicProfileScreenState extends State<PublicProfileScreen> {
   Map<String, dynamic>? _data;
+  Map<String, dynamic>? _relation;
   String? _error;
+  bool _busy = false;
 
   @override
   void initState() {
@@ -26,9 +29,47 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
   Future<void> _load() async {
     try {
       final r = await Api.instance.get('/profile/${widget.username}') as Map<String, dynamic>;
-      if (mounted) setState(() => _data = r);
+      if (!mounted) return;
+      setState(() => _data = r);
+      final id = (r['profile'] as Map?)?['id'] as String?;
+      final me = Supabase.instance.client.auth.currentUser?.id;
+      if (id != null && id != me) {
+        final rel = await Api.instance.get('/social/relation/$id') as Map<String, dynamic>;
+        if (mounted) setState(() => _relation = rel);
+      }
     } on ApiError catch (e) {
       if (mounted) setState(() => _error = e.message);
+    }
+  }
+
+  Future<void> _toggleFollow(String userId) async {
+    setState(() => _busy = true);
+    try {
+      final following = _relation?['isFollowing'] == true;
+      if (following) {
+        await Api.instance.delete('/social/follow', {'userId': userId});
+      } else {
+        await Api.instance.post('/social/follow', {'userId': userId});
+      }
+      final rel = await Api.instance.get('/social/relation/$userId') as Map<String, dynamic>;
+      if (mounted) setState(() => _relation = rel);
+    } on ApiError catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _addFriend(String userId) async {
+    setState(() => _busy = true);
+    try {
+      await Api.instance.post('/social/friends/request', {'userId': userId});
+      final rel = await Api.instance.get('/social/relation/$userId') as Map<String, dynamic>;
+      if (mounted) setState(() => _relation = rel);
+    } on ApiError catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 
@@ -74,6 +115,31 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                           '${profile['wins']}W / ${profile['losses']}L / ${profile['draws']}D · ${profile['games_played']} games',
                           style: t.textTheme.bodyMedium,
                         ),
+                        if (_relation != null) ...[
+                          const SizedBox(height: 16),
+                          Row(children: [
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: _busy ? null : () => _toggleFollow(profile['id'] as String),
+                                icon: Icon(_relation!['isFollowing'] == true ? Icons.check : Icons.add),
+                                label: Text(_relation!['isFollowing'] == true ? 'Following' : 'Follow'),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(child: _FriendButton(relation: _relation!, busy: _busy, onTap: () => _addFriend(profile['id'] as String))),
+                          ]),
+                          const SizedBox(height: 10),
+                          SizedBox(
+                            width: double.infinity,
+                            child: TextButton.icon(
+                              onPressed: () => Navigator.of(context).push(
+                                MaterialPageRoute(builder: (_) => ConversationScreen(username: widget.username)),
+                              ),
+                              icon: const Icon(Icons.message_outlined),
+                              label: const Text('Message'),
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 20),
                         Text('Recent games', style: t.textTheme.titleMedium),
                         const SizedBox(height: 8),
@@ -105,5 +171,25 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                       ],
                     ),
     );
+  }
+}
+
+class _FriendButton extends StatelessWidget {
+  const _FriendButton({required this.relation, required this.busy, required this.onTap});
+  final Map<String, dynamic> relation;
+  final bool busy;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final friend = relation['friend'] as Map?;
+    if (friend == null) {
+      return FilledButton.icon(onPressed: busy ? null : onTap, icon: const Icon(Icons.person_add_outlined), label: const Text('Add friend'));
+    }
+    if (friend['status'] == 'accepted') {
+      return const OutlinedButton(onPressed: null, child: Text('Friends'));
+    }
+    final iAmRequester = friend['iAmRequester'] == true;
+    return OutlinedButton(onPressed: null, child: Text(iAmRequester ? 'Request sent' : 'Respond in Social'));
   }
 }

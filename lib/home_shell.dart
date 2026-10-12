@@ -11,6 +11,7 @@ import 'games/challenge_screens.dart';
 import 'games/play_screen.dart';
 import 'profile/profile_screen.dart';
 import 'puzzles/puzzles_screen.dart';
+import 'social/social_screen.dart';
 import 'tournaments/tournaments_screen.dart';
 
 class HomeShell extends StatefulWidget {
@@ -64,6 +65,7 @@ class _HomeShellState extends State<HomeShell> {
       const PuzzlesScreen(),
       PlayScreen(config: widget.config),
       const TournamentsScreen(),
+      const SocialScreen(),
       const ProfileScreen(),
     ];
     return Scaffold(
@@ -75,6 +77,7 @@ class _HomeShellState extends State<HomeShell> {
           NavigationDestination(icon: Icon(Icons.extension_outlined), label: 'Puzzles'),
           NavigationDestination(icon: Icon(Icons.sports_esports_outlined), label: 'Play'),
           NavigationDestination(icon: Icon(Icons.emoji_events_outlined), label: 'Tournaments'),
+          NavigationDestination(icon: Icon(Icons.people_outline), label: 'Social'),
           NavigationDestination(icon: Icon(Icons.person_outline), label: 'Profile'),
         ],
       ),
