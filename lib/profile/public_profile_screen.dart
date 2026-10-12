@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/api.dart';
+import '../core/report_dialog.dart';
 import '../games/game_screen.dart';
 import '../social/conversation_screen.dart';
 
@@ -73,14 +74,58 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
     }
   }
 
+  Future<void> _onReport(String userId) async {
+    final filed = await showReportDialog(context, targetType: 'user', targetId: userId);
+    if (filed && mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Report sent. Thank you.')));
+  }
+
+  Future<void> _toggleBlock(String userId, bool currentlyBlocked) async {
+    setState(() => _busy = true);
+    try {
+      await Api.instance.post(currentlyBlocked ? '/social/unblock' : '/social/block', {'userId': userId});
+      final rel = await Api.instance.get('/social/relation/$userId') as Map<String, dynamic>;
+      if (mounted) {
+        setState(() => _relation = rel);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(currentlyBlocked ? 'Unblocked.' : 'Blocked.')));
+      }
+    } on ApiError catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
     final data = _data;
     final profile = data?['profile'] as Map<String, dynamic>?;
     final games = (data?['games'] as List?)?.cast<Map<String, dynamic>>() ?? const [];
+    final friend = _relation?['friend'] as Map?;
+    final blocked = friend?['status'] == 'blocked';
+    final blockedByMe = friend?['blockedByMe'] == true;
+    final userId = profile?['id'] as String?;
     return Scaffold(
-      appBar: AppBar(title: Text(widget.username)),
+      appBar: AppBar(
+        title: Text(widget.username),
+        actions: [
+          if (userId != null)
+            PopupMenuButton<String>(
+              onSelected: (choice) {
+                if (choice == 'report') {
+                  _onReport(userId);
+                } else if (choice == 'block' || choice == 'unblock') {
+                  _toggleBlock(userId, blockedByMe);
+                }
+              },
+              itemBuilder: (context) => [
+                const PopupMenuItem(value: 'report', child: Text('Report')),
+                if (!blocked || blockedByMe)
+                  PopupMenuItem(value: blockedByMe ? 'unblock' : 'block', child: Text(blockedByMe ? 'Unblock' : 'Block')),
+              ],
+            ),
+        ],
+      ),
       body: _error != null
           ? Center(child: Text(_error!))
           : data == null
@@ -115,7 +160,13 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                           '${profile['wins']}W / ${profile['losses']}L / ${profile['draws']}D · ${profile['games_played']} games',
                           style: t.textTheme.bodyMedium,
                         ),
-                        if (_relation != null) ...[
+                        if (_relation != null && blocked) ...[
+                          const SizedBox(height: 16),
+                          Text(
+                            blockedByMe ? "You've blocked this player." : "You can't interact with this player.",
+                            style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurfaceVariant),
+                          ),
+                        ] else if (_relation != null) ...[
                           const SizedBox(height: 16),
                           Row(children: [
                             Expanded(

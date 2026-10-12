@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/api.dart';
+import '../core/report_dialog.dart';
 
 /// A direct-message thread with one player (GET/POST /social/messages/{username}).
 class ConversationScreen extends StatefulWidget {
@@ -45,6 +46,36 @@ class _ConversationScreenState extends State<ConversationScreen> {
     }
   }
 
+  Future<void> _onReport() async {
+    final otherId = _otherId;
+    if (otherId == null) return;
+    final filed = await showReportDialog(context, targetType: 'user', targetId: otherId);
+    if (filed && mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Report sent. Thank you.')));
+  }
+
+  Future<void> _onBlock() async {
+    final otherId = _otherId;
+    if (otherId == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Block this player?'),
+        content: Text("${widget.username} won't be able to message, follow or friend-request you."),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Block')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await Api.instance.post('/social/block', {'userId': otherId});
+      if (mounted) Navigator.of(context).pop();
+    } on ApiError catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    }
+  }
+
   Future<void> _send() async {
     final text = _controller.text.trim();
     final otherId = _otherId;
@@ -67,7 +98,21 @@ class _ConversationScreenState extends State<ConversationScreen> {
     final myId = Supabase.instance.client.auth.currentUser?.id;
     final messages = _messages;
     return Scaffold(
-      appBar: AppBar(title: Text(widget.username)),
+      appBar: AppBar(
+        title: Text(widget.username),
+        actions: [
+          PopupMenuButton<String>(
+            onSelected: (choice) {
+              if (choice == 'report') _onReport();
+              if (choice == 'block') _onBlock();
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem(value: 'report', child: Text('Report')),
+              PopupMenuItem(value: 'block', child: Text('Block')),
+            ],
+          ),
+        ],
+      ),
       body: Column(children: [
         Expanded(
           child: _error != null
