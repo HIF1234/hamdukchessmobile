@@ -82,16 +82,12 @@ class _HamdukChessAppState extends State<HamdukChessApp> {
 
   @override
   Widget build(BuildContext context) {
-    ThemeData theme(Brightness b) => ThemeData(
-          useMaterial3: true,
-          colorScheme: ColorScheme.fromSeed(seedColor: brandGreen, brightness: b, primary: brandGreen),
-        );
     final config = widget.config;
     return MaterialApp(
       title: 'Hamduk Chess',
       debugShowCheckedModeBanner: false,
-      theme: theme(Brightness.light),
-      darkTheme: theme(Brightness.dark),
+      theme: buildTheme(Brightness.light),
+      darkTheme: buildTheme(Brightness.dark),
       home: config == null
           ? const _FirstRunOffline()
           : _showOnboarding
