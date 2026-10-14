@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/api.dart';
+import '../core/app_config.dart';
 import '../core/hc_widgets.dart';
 import '../core/theme.dart';
 import '../games/game_screen.dart';
@@ -145,7 +146,9 @@ class _Body extends StatelessWidget {
               ],
               const SizedBox(height: 14),
               if (status == 'scheduled' && myEntry == null)
-                FilledButton(onPressed: busy ? null : onJoin, child: const Text('Join tournament'))
+                feeKobo > 0 && !(AppConfig.current?.feature('paidTournaments') ?? true)
+                    ? const Text('Paid tournament entry is temporarily unavailable.')
+                    : FilledButton(onPressed: busy ? null : onJoin, child: const Text('Join tournament'))
               else if (myEntry != null && myEntry['status'] == 'active' && status != 'completed')
                 OutlinedButton(onPressed: busy ? null : onWithdraw, child: const Text('Withdraw')),
             ]),

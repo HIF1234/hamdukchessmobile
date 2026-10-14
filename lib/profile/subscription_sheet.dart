@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../core/api.dart';
+import '../core/app_config.dart';
 
 /// Pricing must match TIER_PRICING in the backend's paystack-pricing.ts.
 const _tiers = [
@@ -54,6 +55,21 @@ class _SubscriptionSheetState extends State<_SubscriptionSheet> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final enabled = AppConfig.current?.feature('subscriptionUpgrade') ?? true;
+    if (!enabled) {
+      return Padding(
+        padding: EdgeInsets.fromLTRB(20, 4, 20, 20 + MediaQuery.of(context).viewPadding.bottom),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Upgrade', style: theme.textTheme.headlineSmall),
+            const SizedBox(height: 8),
+            const Text('Upgrades are temporarily unavailable. Please try again later.'),
+          ],
+        ),
+      );
+    }
     return Padding(
       padding: EdgeInsets.fromLTRB(20, 4, 20, 20 + MediaQuery.of(context).viewPadding.bottom),
       child: Column(

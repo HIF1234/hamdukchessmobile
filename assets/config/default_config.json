@@ -364,6 +364,9 @@
     "message": "We're upgrading. Back soon."
   },
   "features": {
-    "paidTournaments": true
+    "paidTournaments": true,
+    "subscriptionUpgrade": true,
+    "coachBooking": true,
+    "chat": true
   }
 }

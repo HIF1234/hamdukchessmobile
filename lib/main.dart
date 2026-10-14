@@ -36,6 +36,7 @@ Future<void> main() async {
   _registerLicenses();
   await AppSettings.instance.load();
   final config = await AppConfig.load();
+  AppConfig.current = config;
   final seenOnboarding = await hasSeenOnboarding();
   final appVersion = (await PackageInfo.fromPlatform()).version;
   if (config != null) {

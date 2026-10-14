@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/api.dart';
+import '../core/app_config.dart';
 import '../core/report_dialog.dart';
 
 /// A direct-message thread with one player (GET/POST /social/messages/{username}).
@@ -151,19 +152,21 @@ class _ConversationScreenState extends State<ConversationScreen> {
           top: false,
           child: Padding(
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-            child: Row(children: [
-              Expanded(
-                child: TextField(
-                  controller: _controller,
-                  decoration: const InputDecoration(hintText: 'Message…', isDense: true),
-                  minLines: 1,
-                  maxLines: 4,
-                  onSubmitted: (_) => _send(),
-                ),
-              ),
-              const SizedBox(width: 8),
-              IconButton.filled(onPressed: _sending ? null : _send, icon: const Icon(Icons.send)),
-            ]),
+            child: (AppConfig.current?.feature('chat') ?? true)
+                ? Row(children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _controller,
+                        decoration: const InputDecoration(hintText: 'Message…', isDense: true),
+                        minLines: 1,
+                        maxLines: 4,
+                        onSubmitted: (_) => _send(),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton.filled(onPressed: _sending ? null : _send, icon: const Icon(Icons.send)),
+                  ])
+                : const Text('Messaging is temporarily unavailable.', textAlign: TextAlign.center),
           ),
         ),
       ]),

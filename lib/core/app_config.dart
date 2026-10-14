@@ -15,6 +15,11 @@ class AppConfig {
   /// it -- meaning this is a first launch with no network yet.
   final bool isBundledFallback;
 
+  /// The config loaded at startup, set once in main(). Lets deep screens (coach booking,
+  /// subscription upgrade, tournament entry, chat) read [feature] without threading
+  /// AppConfig through every constructor -- the same pattern as AppSettings.instance.
+  static AppConfig? current;
+
   String get supabaseUrl => raw['supabase']['url'] as String;
   String get supabaseAnonKey => raw['supabase']['anonKey'] as String;
   String get minAppVersion => raw['minAppVersion'] as String? ?? '1.0.0';

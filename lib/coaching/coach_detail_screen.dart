@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../core/api.dart';
+import '../core/app_config.dart';
 import '../core/hc_widgets.dart';
 import '../core/theme.dart';
 
@@ -126,12 +127,14 @@ class _CoachDetailScreenState extends State<CoachDetailScreen> {
           ? null
           : SafeArea(
               minimum: const EdgeInsets.all(16),
-              child: FilledButton(
-                onPressed: _booking ? null : _showBookingSheet,
-                child: _booking
-                    ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Text('Book a session'),
-              ),
+              child: (AppConfig.current?.feature('coachBooking') ?? true)
+                  ? FilledButton(
+                      onPressed: _booking ? null : _showBookingSheet,
+                      child: _booking
+                          ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Text('Book a session'),
+                    )
+                  : const Text('Booking is temporarily unavailable.', textAlign: TextAlign.center),
             ),
     );
   }
