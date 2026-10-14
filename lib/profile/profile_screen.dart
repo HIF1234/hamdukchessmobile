@@ -7,6 +7,7 @@ import '../coaching/coaches_screen.dart';
 import '../coaching/my_sessions_screen.dart';
 import '../core/api.dart';
 import '../core/hc_widgets.dart';
+import '../core/nigeria_states.dart';
 import '../core/push.dart';
 import '../core/settings.dart';
 import '../core/theme.dart';
@@ -162,6 +163,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 if (Supabase.instance.client.auth.currentUser?.isAnonymous == false) ...[
                   HcListRow(
+                    title: 'Location',
+                    subtitle: account?['state'] as String? ?? 'For state leaderboards',
+                    onTap: () => _editState(context),
+                  ),
+                  HcListRow(
                     title: 'Passkeys',
                     subtitle: 'Sign in with your face, fingerprint or a security key',
                     onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PasskeysScreen())),
@@ -196,6 +202,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _editState(BuildContext context) async {
+    final current = _me?['account']?['state'] as String?;
+    final chosen = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            for (final s in nigeriaStates)
+              ListTile(title: Text(s), trailing: s == current ? const Icon(Icons.check_rounded) : null, onTap: () => Navigator.pop(ctx, s)),
+          ],
+        ),
+      ),
+    );
+    if (chosen == null || chosen == current) return;
+    try {
+      await Api.instance.patch('/account', {'state': chosen});
+      await _load();
+    } on ApiError catch (e) {
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    }
   }
 
   Future<void> _signOut(BuildContext context) async {

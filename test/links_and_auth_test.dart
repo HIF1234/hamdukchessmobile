@@ -58,6 +58,8 @@ void main() {
       await t.pump();
       await t.enterText(find.widgetWithText(TextField, 'Email'), 'ade@example.com');
       await t.enterText(find.widgetWithText(TextField, 'Password'), 'short');
+      await t.tap(find.byType(Checkbox));
+      await t.pump();
       await t.tap(find.widgetWithText(FilledButton, 'Create account'));
       await t.pump();
       expect(find.text('Choose a longer password -- at least 8 characters.'), findsOneWidget);
@@ -71,9 +73,20 @@ void main() {
       await t.enterText(find.widgetWithText(TextField, 'Email'), 'ade@example.com');
       await t.enterText(find.widgetWithText(TextField, 'Username (optional)'), 'no spaces!');
       await t.enterText(find.widgetWithText(TextField, 'Password'), 'secret123');
+      await t.tap(find.byType(Checkbox));
+      await t.pump();
       await t.tap(find.widgetWithText(FilledButton, 'Create account'));
       await t.pump();
       expect(find.text('Usernames are 3–20 letters, numbers or underscores.'), findsOneWidget);
+    });
+
+    testWidgets('sign-up requires agreeing to the Terms and Privacy Policy', (t) async {
+      await open(t);
+      await t.tap(find.text('New here? Create a free account'));
+      await t.pump();
+      await t.enterText(find.widgetWithText(TextField, 'Email'), 'ade@example.com');
+      await t.enterText(find.widgetWithText(TextField, 'Password'), 'secret123');
+      expect(t.widget<FilledButton>(find.widgetWithText(FilledButton, 'Create account')).onPressed, isNull);
     });
 
     testWidgets('forgot password hides the password field', (t) async {

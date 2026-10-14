@@ -32,6 +32,7 @@ class Api {
 
   Future<dynamic> get(String path, [Map<String, String>? query]) => _send('GET', path, query: query);
   Future<dynamic> post(String path, [Object? body]) => _send('POST', path, body: body);
+  Future<dynamic> patch(String path, [Object? body]) => _send('PATCH', path, body: body);
   Future<dynamic> delete(String path, [Object? body]) => _send('DELETE', path, body: body);
 
   Future<dynamic> _send(String method, String path, {Map<String, String>? query, Object? body}) async {

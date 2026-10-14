@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../core/app_config.dart';
 import '../core/hc_widgets.dart';
+import '../core/nigeria_states.dart';
 import '../core/theme.dart';
 import 'auth_errors.dart';
 import 'check_your_email_screen.dart';
@@ -38,6 +39,8 @@ class _SignInScreenState extends State<SignInScreen> {
   String? _info;
   int _failedAttempts = 0;
   DateTime? _lockedUntil;
+  String? _state;
+  bool _termsAccepted = false;
 
   static final _usernameRule = RegExp(r'^[a-z0-9_]{3,20}$');
 
@@ -137,6 +140,9 @@ class _SignInScreenState extends State<SignInScreen> {
     if (_mode == _Mode.signUp && username.isNotEmpty && !_usernameRule.hasMatch(username)) {
       return setState(() => _error = 'Usernames are 3–20 letters, numbers or underscores.');
     }
+    if (_mode == _Mode.signUp && !_termsAccepted) {
+      return setState(() => _error = 'Agree to the Terms and Privacy Policy to continue.');
+    }
     setState(() {
       _busy = true;
       _error = null;
@@ -153,7 +159,12 @@ class _SignInScreenState extends State<SignInScreen> {
           final r = await auth.signUp(
             email: email,
             password: _password.text,
-            data: {if (username.isNotEmpty) 'username': username},
+            data: {
+              if (username.isNotEmpty) 'username': username,
+              'country': 'NG',
+              if (_state != null) 'state': _state,
+              'terms_accepted': 'true',
+            },
             // Lands on our verified Android App Link; supabase_flutter's own deep-link
             // handling then signs the app in directly, without opening a browser.
             emailRedirectTo: '$_site/auth/callback',
@@ -269,6 +280,15 @@ class _SignInScreenState extends State<SignInScreen> {
                               ),
                               onSubmitted: (_) => _passwordFocus.requestFocus(),
                             ),
+                            const SizedBox(height: HcSpace.s3),
+                            DropdownButtonFormField<String>(
+                              initialValue: _state,
+                              decoration: const InputDecoration(labelText: 'State (optional) • Nigeria'),
+                              items: [
+                                for (final s in nigeriaStates) DropdownMenuItem(value: s, child: Text(s)),
+                              ],
+                              onChanged: (v) => setState(() => _state = v),
+                            ),
                           ],
                           if (_mode != _Mode.reset) ...[
                             const SizedBox(height: HcSpace.s3),
@@ -304,10 +324,24 @@ class _SignInScreenState extends State<SignInScreen> {
                             const SizedBox(height: HcSpace.s3),
                             Text(_info!, style: HcText.bodySm.copyWith(color: hc.green)),
                           ],
+                          if (_mode == _Mode.signUp) ...[
+                            const SizedBox(height: HcSpace.s3),
+                            Material(
+                              type: MaterialType.transparency,
+                              child: CheckboxListTile(
+                                value: _termsAccepted,
+                                onChanged: (v) => setState(() => _termsAccepted = v ?? false),
+                                controlAffinity: ListTileControlAffinity.leading,
+                                contentPadding: EdgeInsets.zero,
+                                dense: true,
+                                title: Text('I agree to the Terms and Privacy Policy', style: HcText.bodySm.copyWith(color: hc.ink2)),
+                              ),
+                            ),
+                          ],
                           const SizedBox(height: HcSpace.s5),
                           FilledButton(
                             style: HcButtons.large(),
-                            onPressed: _busy || lockRemaining != null ? null : _submit,
+                            onPressed: _busy || lockRemaining != null || (_mode == _Mode.signUp && !_termsAccepted) ? null : _submit,
                             child: _busy
                                 ? const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2))
                                 : Text(lockRemaining != null
