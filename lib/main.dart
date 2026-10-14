@@ -6,11 +6,13 @@ import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'auth/sign_in_screen.dart';
 import 'bots/bot_results.dart';
 import 'core/app_config.dart';
+import 'core/force_update_screen.dart';
 import 'core/links.dart';
 import 'core/settings.dart';
 import 'core/telemetry.dart';
@@ -35,6 +37,7 @@ Future<void> main() async {
   await AppSettings.instance.load();
   final config = await AppConfig.load();
   final seenOnboarding = await hasSeenOnboarding();
+  final appVersion = (await PackageInfo.fromPlatform()).version;
   if (config != null) {
     await Supabase.initialize(url: config.supabaseUrl, publishableKey: config.supabaseAnonKey);
     final auth = Supabase.instance.client.auth;
@@ -44,7 +47,7 @@ Future<void> main() async {
   }
   unawaited(IncomingLinks.instance.start());
   AppLifecycleListener(onPause: () => Telemetry.sessionData(bytes: DataMeter.bytes, since: DataMeter.started));
-  runApp(HamdukChessApp(config: config, showOnboarding: !seenOnboarding));
+  runApp(HamdukChessApp(config: config, showOnboarding: !seenOnboarding, appVersion: appVersion));
 }
 
 /// Adds Stockfish and the piece set to the app's licences screen (Profile → About & licences).
@@ -69,8 +72,9 @@ Copyright (c) 2022 Ryan Gregory.''');
 }
 
 class HamdukChessApp extends StatefulWidget {
-  const HamdukChessApp({super.key, required this.config, this.showOnboarding = false});
+  const HamdukChessApp({super.key, required this.config, required this.appVersion, this.showOnboarding = false});
   final AppConfig? config;
+  final String appVersion;
   final bool showOnboarding;
 
   @override
@@ -90,9 +94,11 @@ class _HamdukChessAppState extends State<HamdukChessApp> {
       darkTheme: buildTheme(Brightness.dark),
       home: config == null
           ? const _FirstRunOffline()
-          : _showOnboarding
-              ? OnboardingScreen(onDone: () => setState(() => _showOnboarding = false))
-              : _AuthGate(config: config),
+          : config.isBelowMinVersion(widget.appVersion)
+              ? const ForceUpdateScreen()
+              : _showOnboarding
+                  ? OnboardingScreen(onDone: () => setState(() => _showOnboarding = false))
+                  : _AuthGate(config: config, appVersion: widget.appVersion),
     );
   }
 }
@@ -100,16 +106,18 @@ class _HamdukChessAppState extends State<HamdukChessApp> {
 /// Signed in: the app. Signed out: sign-in. Follows Supabase's session, which it keeps on
 /// the device, so a signed-in player can open the app offline.
 class _AuthGate extends StatelessWidget {
-  const _AuthGate({required this.config});
+  const _AuthGate({required this.config, required this.appVersion});
   final AppConfig config;
+  final String appVersion;
 
   @override
   Widget build(BuildContext context) {
     final auth = Supabase.instance.client.auth;
     return StreamBuilder<AuthState>(
       stream: auth.onAuthStateChange,
-      builder: (context, _) =>
-          auth.currentSession == null ? SignInScreen(config: config) : HomeShell(config: config),
+      builder: (context, _) => auth.currentSession == null
+          ? SignInScreen(config: config)
+          : HomeShell(config: config, appVersion: appVersion),
     );
   }
 }

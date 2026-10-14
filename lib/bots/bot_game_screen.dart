@@ -8,6 +8,7 @@ import '../core/hc_widgets.dart';
 import '../core/settings.dart';
 import '../core/telemetry.dart';
 import '../core/theme.dart';
+import '../core/active_game.dart';
 import '../engine/bot_brain.dart';
 import '../engine/device.dart';
 import '../engine/uci_engine.dart';
@@ -17,9 +18,11 @@ import 'bot_results.dart';
 /// A game against one of the Naija bots, played entirely on the phone. Stockfish runs as a
 /// separate program; no connection needed.
 class BotGameScreen extends StatefulWidget {
-  const BotGameScreen({super.key, required this.bot, required this.playWhite});
+  const BotGameScreen({super.key, required this.bot, required this.playWhite, this.initialSanMoves});
   final Map<String, dynamic> bot;
   final bool playWhite;
+  /// When resuming a game the app closed mid-way through (see [ActiveGame]).
+  final List<String>? initialSanMoves;
 
   @override
   State<BotGameScreen> createState() => _BotGameScreenState();
@@ -45,13 +48,28 @@ class _BotGameScreenState extends State<BotGameScreen> {
   @override
   void initState() {
     super.initState();
+    final initial = widget.initialSanMoves;
+    if (initial != null) {
+      for (final san in initial) {
+        _game.move(san);
+      }
+      _ply = initial.length;
+      final hist = _game.getHistory({'verbose': true});
+      _last = hist.isEmpty ? null : ((hist.last as Map)['from'] as String, (hist.last as Map)['to'] as String);
+    }
+    _rememberProgress();
     _startEngine();
+  }
+
+  /// Keeps [ActiveGame] in sync so the app can resume here if it's closed mid-game.
+  void _rememberProgress() {
+    ActiveGame.setBot(botId: widget.bot['id'] as String, playWhite: widget.playWhite, sanMoves: _game.getHistory().cast<String>());
   }
 
   Future<void> _startEngine() async {
     try {
       _engine = await UciEngine.start(await Device.stockfishPath());
-      if (!widget.playWhite) _botMove();
+      if (_result == null && (_game.turn == ch.Color.WHITE) != widget.playWhite) _botMove();
     } catch (e, st) {
       Telemetry.recordError(e, st, reason: 'engine start');
       setState(() => _engineError = "The bot engine couldn't start on this phone.");
@@ -72,6 +90,7 @@ class _BotGameScreenState extends State<BotGameScreen> {
       _hintMove = null;
       _ply++;
     });
+    _rememberProgress();
     if (!_checkEnd()) _botMove();
     return true;
   }
@@ -92,6 +111,7 @@ class _BotGameScreenState extends State<BotGameScreen> {
       _ply++;
       _thinking = false;
     });
+    _rememberProgress();
     _checkEnd();
   }
 
@@ -118,6 +138,7 @@ class _BotGameScreenState extends State<BotGameScreen> {
       final hist = _game.getHistory({'verbose': true});
       _last = hist.isEmpty ? null : ((hist.last as Map)['from'] as String, (hist.last as Map)['to'] as String);
     });
+    _rememberProgress();
   }
 
   /// Ends the game if the position is over. Returns true when it did.
@@ -152,6 +173,7 @@ class _BotGameScreenState extends State<BotGameScreen> {
       _reason = reason;
       _hintMove = null;
     });
+    ActiveGame.clear();
     BotResults.add({
       'timeControl': '5+0', // bot games are untimed; recorded the same way as on the website
       'variant': 'standard',
@@ -187,6 +209,7 @@ class _BotGameScreenState extends State<BotGameScreen> {
       _reason = null;
       _ply = 0;
     });
+    _rememberProgress();
     if (!widget.playWhite) _botMove();
   }
 

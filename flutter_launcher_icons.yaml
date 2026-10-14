@@ -4,3 +4,8 @@ flutter_launcher_icons:
   image_path: "assets/branding/logo.png"
   min_sdk_android: 21
   remove_alpha_ios: true
+  # Android adaptive icon (API 26+): forest-green background, crest foreground.
+  adaptive_icon_background: "#0F2E1C"
+  adaptive_icon_foreground: "assets/branding/icon_foreground.png"
+  # Android 13+ themed (monochrome) icon: single-colour silhouette the system tints.
+  adaptive_icon_monochrome: "assets/branding/icon_monochrome.png"

@@ -6,12 +6,15 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'auth/passkey_auth.dart';
+import 'bots/bot_game_screen.dart';
+import 'core/active_game.dart';
 import 'core/app_config.dart';
 import 'core/hc_widgets.dart';
 import 'core/links.dart';
 import 'core/push.dart';
 import 'core/storage.dart';
 import 'core/theme.dart';
+import 'core/whats_new.dart';
 import 'games/game_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'games/challenge_screens.dart';
@@ -22,8 +25,9 @@ import 'social/social_screen.dart';
 import 'tournaments/tournaments_screen.dart';
 
 class HomeShell extends StatefulWidget {
-  const HomeShell({super.key, required this.config});
+  const HomeShell({super.key, required this.config, required this.appVersion});
   final AppConfig config;
+  final String appVersion;
 
   @override
   State<HomeShell> createState() => _HomeShellState();
@@ -33,6 +37,8 @@ class _HomeShellState extends State<HomeShell> {
   int _tab = 0;
   StreamSubscription<String>? _links;
   StreamSubscription<String>? _gameLinks;
+  bool _offlineBannerDismissed = false;
+  bool _updateBannerDismissed = false;
 
   @override
   void initState() {
@@ -47,6 +53,28 @@ class _HomeShellState extends State<HomeShell> {
     if (pendingGame != null) WidgetsBinding.instance.addPostFrameCallback((_) => _openGame(pendingGame));
     Push.start();
     WidgetsBinding.instance.addPostFrameCallback((_) => _maybePromptPasskey());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeResumeGame());
+    WidgetsBinding.instance.addPostFrameCallback((_) => maybeShowWhatsNew(context, widget.appVersion));
+  }
+
+  /// If the app closed mid-game last time, reopen it now: online games reconnect through
+  /// the game screen's own controller, bot games replay their saved moves.
+  Future<void> _maybeResumeGame() async {
+    final pending = await ActiveGame.takePending();
+    if (pending == null || !mounted) return;
+    final me = Supabase.instance.client.auth.currentUser?.id;
+    switch (pending) {
+      case OnlineActiveGame(gameId: final id):
+        if (me == null) return;
+        Navigator.of(context).push(MaterialPageRoute(builder: (_) => GameScreen(gameId: id, myId: me)));
+      case BotActiveGame(botId: final botId, playWhite: final playWhite, sanMoves: final moves):
+        final matches = widget.config.bots.where((b) => b['id'] == botId);
+        if (matches.isEmpty) return;
+        final bot = matches.first;
+        Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => BotGameScreen(bot: bot, playWhite: playWhite, initialSanMoves: moves),
+        ));
+    }
   }
 
   /// Offers to add a passkey once per account, right after a real (non-guest) sign-in, so
@@ -113,7 +141,38 @@ class _HomeShellState extends State<HomeShell> {
       const ProfileScreen(),
     ];
     return Scaffold(
-      body: SafeArea(child: IndexedStack(index: _tab, children: pages)),
+      body: SafeArea(
+        child: Column(
+          children: [
+            if (widget.config.maintenanceEnabled)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(HcSpace.s4, HcSpace.s2, HcSpace.s4, 0),
+                child: HcBanner(icon: Icons.build_rounded, text: widget.config.maintenanceMessage, tone: HcBannerTone.info),
+              ),
+            if (widget.config.isBundledFallback && !_offlineBannerDismissed)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(HcSpace.s4, HcSpace.s2, HcSpace.s4, 0),
+                child: HcBanner(
+                  icon: Icons.cloud_off_rounded,
+                  text: "You're offline. Bots, puzzles and local play still work.",
+                  tone: HcBannerTone.info,
+                  actions: [TextButton(style: HcButtons.small(), onPressed: () => setState(() => _offlineBannerDismissed = true), child: const Text('Dismiss'))],
+                ),
+              ),
+            if (!_updateBannerDismissed && widget.config.hasOptionalUpdate(widget.appVersion))
+              Padding(
+                padding: const EdgeInsets.fromLTRB(HcSpace.s4, HcSpace.s2, HcSpace.s4, 0),
+                child: HcBanner(
+                  icon: Icons.system_update_rounded,
+                  text: 'A new version of Hamduk Chess is available.',
+                  tone: HcBannerTone.offer,
+                  actions: [TextButton(style: HcButtons.small(), onPressed: () => setState(() => _updateBannerDismissed = true), child: const Text('Dismiss'))],
+                ),
+              ),
+            Expanded(child: IndexedStack(index: _tab, children: pages)),
+          ],
+        ),
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tab,
         onDestinationSelected: (i) => setState(() => _tab = i),

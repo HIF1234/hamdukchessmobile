@@ -1,12 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Hamduk Chess splash: white background, brand mark centered. Shown while the process
-     starts, until Flutter draws its first frame (see main.dart's own splash for the config-load
-     wait after that). -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="@android:color/white" />
     <item>
-        <bitmap
-            android:gravity="center"
-            android:src="@drawable/launch_logo" />
+        <bitmap android:gravity="fill" android:src="@drawable/background"/>
+    </item>
+    <item>
+        <bitmap android:gravity="center" android:src="@drawable/splash"/>
     </item>
 </layer-list>

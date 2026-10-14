@@ -1,0 +1,369 @@
+{
+  "apiVersion": "1",
+  "minAppVersion": "1.0.0",
+  "supabase": {
+    "url": "https://mzupxdpbsxlovxwcokla.supabase.co",
+    "anonKey": "sb_publishable_fzDEGWhyUk8ZW2LUm18TAw_4iVH-VFJ"
+  },
+  "googleWebClientId": "281734921146-7gnloii2uq4ehcigocggmhdlc6pksdvk.apps.googleusercontent.com",
+  "timeControls": [
+    {
+      "id": "1+0",
+      "category": "bullet",
+      "label": "1 min"
+    },
+    {
+      "id": "2+1",
+      "category": "bullet",
+      "label": "2 | +1"
+    },
+    {
+      "id": "3+0",
+      "category": "blitz",
+      "label": "3 min"
+    },
+    {
+      "id": "3+2",
+      "category": "blitz",
+      "label": "3 | +2"
+    },
+    {
+      "id": "5+0",
+      "category": "blitz",
+      "label": "5 min"
+    },
+    {
+      "id": "10+0",
+      "category": "rapid",
+      "label": "10 min"
+    },
+    {
+      "id": "15+10",
+      "category": "rapid",
+      "label": "15 | +10"
+    },
+    {
+      "id": "30+0",
+      "category": "classical",
+      "label": "30 min"
+    }
+  ],
+  "bots": [
+    {
+      "id": "army_legend",
+      "name": "Army Legend",
+      "hometown": "Abeokuta",
+      "rating": 500,
+      "tier": "free",
+      "catchphrase": "Still learning the pieces",
+      "bio": "Just discovered chess at the barracks. Loves the horsey.",
+      "avatar": "\ud83e\ude96",
+      "portraitUrl": "https://play.chess.hamduk.com.ng/assets/army_legend-DF8h4Ygm.jpg",
+      "engine": {
+        "depthMin": 1,
+        "depthMax": 2,
+        "blunderRate": 0.15,
+        "randomness": 0.3,
+        "movetimeMs": 300,
+        "openingRepertoire": [
+          "e2e4",
+          "d2d4"
+        ]
+      }
+    },
+    {
+      "id": "agbero",
+      "name": "Agbero",
+      "hometown": "Lagos Island",
+      "rating": 800,
+      "tier": "free",
+      "catchphrase": "Street smart, chess dumb",
+      "bio": "Runs the motor park by day, hustles bullet by night.",
+      "avatar": "\ud83e\udde2",
+      "portraitUrl": "https://play.chess.hamduk.com.ng/assets/agbero-LVHs05N2.jpg",
+      "engine": {
+        "depthMin": 2,
+        "depthMax": 4,
+        "blunderRate": 0.12,
+        "randomness": 0.25,
+        "movetimeMs": 350,
+        "openingRepertoire": [
+          "e2e4",
+          "b1c3"
+        ]
+      }
+    },
+    {
+      "id": "iyaamala",
+      "name": "Iyaamala",
+      "hometown": "Ibadan",
+      "rating": 1000,
+      "tier": "free",
+      "catchphrase": "Plays by feeling",
+      "bio": "Sells amala by day, swindles club regulars by night.",
+      "avatar": "\ud83c\udf72",
+      "portraitUrl": "https://play.chess.hamduk.com.ng/assets/iyaamala-0nOGss5L.jpg",
+      "engine": {
+        "depthMin": 3,
+        "depthMax": 5,
+        "blunderRate": 0.1,
+        "randomness": 0.2,
+        "movetimeMs": 400,
+        "openingRepertoire": [
+          "e2e4",
+          "g1f3"
+        ]
+      }
+    },
+    {
+      "id": "baba_ijebu",
+      "name": "Baba Ijebu",
+      "hometown": "Ijebu-Ode",
+      "rating": 1200,
+      "tier": "free",
+      "catchphrase": "Lucky but tricky",
+      "bio": "Lottery kingpin. Believes every opening is a numbers game.",
+      "avatar": "\ud83c\udfb2",
+      "portraitUrl": "https://play.chess.hamduk.com.ng/assets/baba_ijebu-DuiGPTJl.jpg",
+      "engine": {
+        "depthMin": 4,
+        "depthMax": 6,
+        "blunderRate": 0.08,
+        "randomness": 0.17,
+        "movetimeMs": 450,
+        "openingRepertoire": [
+          "e2e4",
+          "c2c4",
+          "d2d4"
+        ]
+      }
+    },
+    {
+      "id": "mama_cass",
+      "name": "Mama Cass",
+      "hometown": "Port Harcourt",
+      "rating": 1400,
+      "tier": "free",
+      "catchphrase": "Patient and dangerous",
+      "bio": "Chess teacher at the Garden City club. Has notebooks of traps.",
+      "avatar": "\ud83d\udc75",
+      "portraitUrl": "https://play.chess.hamduk.com.ng/assets/mama_cass-pT4f_5rk.jpg",
+      "engine": {
+        "depthMin": 5,
+        "depthMax": 7,
+        "blunderRate": 0.07,
+        "randomness": 0.14,
+        "movetimeMs": 500,
+        "openingRepertoire": [
+          "d2d4",
+          "c2c4",
+          "e2e4"
+        ]
+      }
+    },
+    {
+      "id": "area_father",
+      "name": "Area Father",
+      "hometown": "Mushin, Lagos",
+      "rating": 1600,
+      "tier": "plus",
+      "catchphrase": "Controls the street",
+      "bio": "Nothing moves in Mushin without his say. Same on the board.",
+      "avatar": "\ud83d\udd76\ufe0f",
+      "portraitUrl": "https://play.chess.hamduk.com.ng/assets/area_father-CiN37Soe.jpg",
+      "engine": {
+        "depthMin": 6,
+        "depthMax": 8,
+        "blunderRate": 0.05,
+        "randomness": 0.12,
+        "movetimeMs": 550,
+        "openingRepertoire": [
+          "e2e4",
+          "d2d4",
+          "c2c4"
+        ]
+      }
+    },
+    {
+      "id": "zobo_master",
+      "name": "Zobo Master",
+      "hometown": "Kano",
+      "rating": 1800,
+      "tier": "plus",
+      "catchphrase": "Calculated cool",
+      "bio": "Sips zobo between moves. Has never been seen flustered.",
+      "avatar": "\ud83e\udd64",
+      "portraitUrl": "https://play.chess.hamduk.com.ng/assets/zobo_master-DxVpZwMm.jpg",
+      "engine": {
+        "depthMin": 7,
+        "depthMax": 9,
+        "blunderRate": 0.04,
+        "randomness": 0.1,
+        "movetimeMs": 600,
+        "openingRepertoire": [
+          "d2d4",
+          "g1f3",
+          "c2c4"
+        ]
+      }
+    },
+    {
+      "id": "third_mainland",
+      "name": "Third Mainland",
+      "hometown": "Lagos Mainland",
+      "rating": 2000,
+      "tier": "plus",
+      "catchphrase": "Long game thinker",
+      "bio": "Plans like a bridge \u2014 long, deliberate, and unavoidable.",
+      "avatar": "\ud83c\udf09",
+      "portraitUrl": "https://play.chess.hamduk.com.ng/assets/third_mainland-CZcWueSJ.jpg",
+      "engine": {
+        "depthMin": 8,
+        "depthMax": 10,
+        "blunderRate": 0.03,
+        "randomness": 0.08,
+        "movetimeMs": 700,
+        "openingRepertoire": [
+          "d2d4",
+          "c2c4",
+          "g1f3"
+        ]
+      }
+    },
+    {
+      "id": "eko_atlantic",
+      "name": "Eko Atlantic",
+      "hometown": "Eko Atlantic",
+      "rating": 2200,
+      "tier": "plus",
+      "catchphrase": "Built different",
+      "bio": "New money, sharp lines. Plays Catalan in a Tom Ford suit.",
+      "avatar": "\ud83c\udfd9\ufe0f",
+      "portraitUrl": "https://play.chess.hamduk.com.ng/assets/eko_atlantic-Dl5bKvji.jpg",
+      "engine": {
+        "depthMin": 9,
+        "depthMax": 11,
+        "blunderRate": 0.025,
+        "randomness": 0.06,
+        "movetimeMs": 800,
+        "openingRepertoire": [
+          "d2d4",
+          "g1f3",
+          "c2c4"
+        ]
+      }
+    },
+    {
+      "id": "queen_amina",
+      "name": "Queen Amina",
+      "hometown": "Zaria",
+      "rating": 2400,
+      "tier": "plus",
+      "catchphrase": "Warrior queen",
+      "bio": "Descendant of the warrior queen. Attacks with cavalry.",
+      "avatar": "\ud83d\udc51",
+      "portraitUrl": "https://play.chess.hamduk.com.ng/assets/queen_amina-D2KUcpPY.jpg",
+      "engine": {
+        "depthMin": 10,
+        "depthMax": 12,
+        "blunderRate": 0.02,
+        "randomness": 0.05,
+        "movetimeMs": 850,
+        "openingRepertoire": [
+          "e2e4",
+          "d2d4",
+          "c2c4"
+        ]
+      }
+    },
+    {
+      "id": "obafemi",
+      "name": "Obafemi",
+      "hometown": "Ile-Ife",
+      "rating": 2600,
+      "tier": "plus",
+      "catchphrase": "The professor",
+      "bio": "OAU chess professor. Has published on the Najdorf.",
+      "avatar": "\ud83c\udf93",
+      "portraitUrl": "https://play.chess.hamduk.com.ng/assets/obafemi-Dn64_xi8.jpg",
+      "engine": {
+        "depthMin": 11,
+        "depthMax": 13,
+        "blunderRate": 0.015,
+        "randomness": 0.04,
+        "movetimeMs": 900,
+        "openingRepertoire": [
+          "e2e4",
+          "d2d4",
+          "c2c4"
+        ]
+      }
+    },
+    {
+      "id": "oduduwa",
+      "name": "Oduduwa",
+      "hometown": "Ile-Ife",
+      "rating": 2800,
+      "tier": "plus",
+      "catchphrase": "Ancient and wise",
+      "bio": "They say he taught the first Ife king to play. They might be right.",
+      "avatar": "\ud83d\uddff",
+      "portraitUrl": "https://play.chess.hamduk.com.ng/assets/oduduwa-T4KS2_Dz.jpg",
+      "engine": {
+        "depthMin": 12,
+        "depthMax": 14,
+        "blunderRate": 0.01,
+        "randomness": 0.03,
+        "movetimeMs": 1000,
+        "openingRepertoire": [
+          "d2d4",
+          "c2c4",
+          "g1f3"
+        ]
+      }
+    },
+    {
+      "id": "naija_legend",
+      "name": "Naija Legend",
+      "hometown": "Abuja",
+      "rating": 3000,
+      "tier": "plus",
+      "catchphrase": "Unbeatable",
+      "bio": "Nigeria's strongest engine-tuned super-GM. No one has scored a point.",
+      "avatar": "\ud83e\udd85",
+      "portraitUrl": "https://play.chess.hamduk.com.ng/assets/naija_legend-BWJ3u8Me.jpg",
+      "engine": {
+        "depthMin": 14,
+        "depthMax": 20,
+        "blunderRate": 0.005,
+        "randomness": 0.02,
+        "movetimeMs": 1200,
+        "openingRepertoire": [
+          "e2e4",
+          "d2d4",
+          "c2c4",
+          "g1f3"
+        ]
+      }
+    }
+  ],
+  "limits": {
+    "freeDailyPuzzles": 20,
+    "freePuzzlePack": 30,
+    "paidPuzzlePack": 500
+  },
+  "links": {
+    "privacy": "https://play.chess.hamduk.com.ng/privacy",
+    "terms": "https://play.chess.hamduk.com.ng/terms",
+    "fairPlay": "https://play.chess.hamduk.com.ng/fair-play",
+    "billing": "https://play.chess.hamduk.com.ng/billing"
+  },
+  "latestAppVersion": null,
+  "maintenance": {
+    "enabled": false,
+    "message": "We're upgrading. Back soon."
+  },
+  "features": {
+    "paidTournaments": true
+  }
+}

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../board/chess_board.dart';
+import '../core/active_game.dart';
 import '../core/hc_widgets.dart';
 import '../core/report_dialog.dart';
 import '../core/settings.dart';
@@ -38,6 +39,14 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   void _onControllerChanged() {
+    final g = c.game;
+    if (g != null && c.isParticipant) {
+      if (g.active) {
+        ActiveGame.setOnline(widget.gameId);
+      } else {
+        ActiveGame.clear();
+      }
+    }
     final n = c.notice;
     if (n != null && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(n)));
