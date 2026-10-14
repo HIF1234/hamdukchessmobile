@@ -158,6 +158,8 @@ class _SignInScreenState extends State<SignInScreen> {
                 padding: const EdgeInsets.fromLTRB(HcSpace.s6, HcSpace.s9, HcSpace.s6, HcSpace.s6),
                 child: Column(
                   children: [
+                    Image.asset('assets/branding/logo.png', width: 96, height: 96),
+                    const SizedBox(height: HcSpace.s3),
                     Text.rich(
                       TextSpan(children: [
                         TextSpan(text: 'Hamduk ', style: HcText.displayLg.copyWith(color: HcColors.onForest)),
