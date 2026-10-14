@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../auth/passkeys_screen.dart';
+import '../auth/two_factor_screen.dart';
 import '../coaching/coaches_screen.dart';
 import '../coaching/my_sessions_screen.dart';
 import '../core/api.dart';
@@ -159,12 +160,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     trailing: Switch(value: AppSettings.instance.lowData, onChanged: AppSettings.instance.setLowData),
                   ),
                 ),
-                if (Supabase.instance.client.auth.currentUser?.isAnonymous == false)
+                if (Supabase.instance.client.auth.currentUser?.isAnonymous == false) ...[
                   HcListRow(
                     title: 'Passkeys',
                     subtitle: 'Sign in with your face, fingerprint or a security key',
                     onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PasskeysScreen())),
                   ),
+                  HcListRow(
+                    title: 'Two-factor sign-in',
+                    subtitle: 'An authenticator-app code, each time you sign in',
+                    onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TwoFactorScreen())),
+                  ),
+                  HcListRow(
+                    title: 'Sign out everywhere',
+                    subtitle: 'End every other session -- for a lost or stolen phone',
+                    onTap: () => _signOutEverywhere(context),
+                  ),
+                ],
                 HcListRow(
                   title: 'About & licences',
                   subtitle: 'Open-source software used in this app',
@@ -175,10 +187,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton(
-                  onPressed: () async {
-                    await Push.stop();
-                    await Supabase.instance.client.auth.signOut();
-                  },
+                  onPressed: () => _signOut(context),
                   child: const Text('Sign out'),
                 ),
               ),
@@ -187,6 +196,43 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _signOut(BuildContext context) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Sign out?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Sign out')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    await Push.stop();
+    await Supabase.instance.client.auth.signOut();
+  }
+
+  Future<void> _signOutEverywhere(BuildContext context) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Sign out everywhere?'),
+        content: const Text('Every other phone, tablet or browser signed into this account will be signed out. This phone stays signed in.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(style: HcButtons.danger(ctx), onPressed: () => Navigator.pop(ctx, true), child: const Text('Sign out everywhere')),
+        ],
+      ),
+    );
+    if (ok != true || !context.mounted) return;
+    try {
+      await Supabase.instance.client.auth.signOut(scope: SignOutScope.others);
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Every other session has been signed out.')));
+    } catch (_) {
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Couldn't reach the server. Try again.")));
+    }
   }
 }
 

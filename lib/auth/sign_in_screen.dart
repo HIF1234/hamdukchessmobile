@@ -1,9 +1,14 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../core/app_config.dart';
 import '../core/hc_widgets.dart';
 import '../core/theme.dart';
+import 'auth_errors.dart';
+import 'check_your_email_screen.dart';
 import 'google_auth.dart';
 import 'passkey_auth.dart';
 
@@ -11,8 +16,8 @@ const _site = 'https://play.chess.hamduk.com.ng';
 
 enum _Mode { signIn, signUp, reset }
 
-/// Sign in, create an account, or reset a password. Same rules as the website: new accounts
-/// confirm their email first; password resets finish on the website.
+/// Sign in, create an account, or reset a password. New accounts confirm their email first
+/// (see [CheckYourEmailScreen]); password resets finish in the app, not on the website.
 class SignInScreen extends StatefulWidget {
   const SignInScreen({super.key, required this.config});
   final AppConfig config;
@@ -25,18 +30,48 @@ class _SignInScreenState extends State<SignInScreen> {
   final _email = TextEditingController();
   final _password = TextEditingController();
   final _username = TextEditingController();
+  final _passwordFocus = FocusNode();
   _Mode _mode = _Mode.signIn;
   bool _busy = false;
+  bool _obscurePassword = true;
   String? _error;
   String? _info;
+  int _failedAttempts = 0;
+  DateTime? _lockedUntil;
 
   static final _usernameRule = RegExp(r'^[a-z0-9_]{3,20}$');
+
+  @override
+  void dispose() {
+    _passwordFocus.dispose();
+    super.dispose();
+  }
 
   void _switch(_Mode m) => setState(() {
         _mode = m;
         _error = null;
         _info = null;
       });
+
+  /// How long until the sign-in button unlocks again, or null when it isn't locked.
+  Duration? get _lockRemaining {
+    final until = _lockedUntil;
+    if (until == null) return null;
+    final left = until.difference(DateTime.now());
+    if (left.isNegative) {
+      _lockedUntil = null;
+      return null;
+    }
+    return left;
+  }
+
+  void _validateEmail() {
+    final email = _email.text.trim().toLowerCase();
+    if (email != _email.text) _email.text = email;
+    if (email.isNotEmpty && !RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
+      setState(() => _error = 'Enter a valid email address.');
+    }
+  }
 
   Future<void> _signInWithGoogle() async {
     final clientId = widget.config.googleWebClientId;
@@ -82,20 +117,21 @@ class _SignInScreenState extends State<SignInScreen> {
     });
     try {
       await Supabase.instance.client.auth.signInAnonymously();
-    } on AuthException catch (e) {
-      setState(() => _error = e.message);
-    } catch (_) {
-      setState(() => _error = 'No connection. Check your data or Wi-Fi.');
+    } catch (e) {
+      setState(() => _error = friendlyAuthError(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
   Future<void> _submit() async {
-    final email = _email.text.trim();
-    if (!email.contains('@')) return setState(() => _error = 'Enter your email address.');
-    if (_mode != _Mode.reset && _password.text.length < 6) {
-      return setState(() => _error = 'Passwords are at least 6 characters.');
+    if (_lockRemaining != null) return;
+    final email = _email.text.trim().toLowerCase();
+    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
+      return setState(() => _error = 'Enter a valid email address.');
+    }
+    if (_mode == _Mode.signUp && _password.text.length < 8) {
+      return setState(() => _error = 'Choose a longer password -- at least 8 characters.');
     }
     final username = _username.text.trim().toLowerCase();
     if (_mode == _Mode.signUp && username.isNotEmpty && !_usernameRule.hasMatch(username)) {
@@ -111,6 +147,8 @@ class _SignInScreenState extends State<SignInScreen> {
       switch (_mode) {
         case _Mode.signIn:
           await auth.signInWithPassword(email: email, password: _password.text);
+          _failedAttempts = 0;
+          TextInput.finishAutofillContext(); // offers to save the password, now that it worked
         case _Mode.signUp:
           final r = await auth.signUp(
             email: email,
@@ -120,22 +158,46 @@ class _SignInScreenState extends State<SignInScreen> {
             // handling then signs the app in directly, without opening a browser.
             emailRedirectTo: '$_site/auth/callback',
           );
-          if (r.session == null) {
-            _switch(_Mode.signIn);
-            setState(() => _info = 'Almost there! Check $email for a link to confirm your account, then sign in here.');
+          if (r.session == null && mounted) {
+            TextInput.finishAutofillContext();
+            await Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => CheckYourEmailScreen(email: email, onChangeEmail: () => Navigator.of(context).pop()),
+            ));
           }
         case _Mode.reset:
-          await auth.resetPasswordForEmail(email, redirectTo: '$_site/reset-password');
+          // The same app link as email confirmation; supabase_flutter notices the recovery
+          // session and the auth gate shows the in-app "set a new password" screen for it.
+          await auth.resetPasswordForEmail(email, redirectTo: '$_site/auth/callback');
           _switch(_Mode.signIn);
-          setState(() => _info = 'If $email has an account, a reset link is on its way. Set a new password, then sign in here.');
+          setState(() => _info = 'If $email has an account, a reset link is on its way.');
       }
-    } on AuthException catch (e) {
-      setState(() => _error = e.message);
-    } catch (_) {
-      setState(() => _error = 'No connection. Check your data or Wi-Fi.');
+    } catch (e) {
+      if (_mode == _Mode.signIn) {
+        _failedAttempts++;
+        if (_failedAttempts >= 5) {
+          setState(() {
+            _lockedUntil = DateTime.now().add(const Duration(minutes: 5));
+            _error = 'Too many tries. Wait 5 minutes.';
+          });
+          if (mounted) setState(() => _busy = false);
+          return;
+        }
+      }
+      setState(() => _error = friendlyAuthError(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  String? _passwordStrength() {
+    final p = _password.text;
+    if (p.isEmpty) return null;
+    var score = 0;
+    if (p.length >= 8) score++;
+    if (p.length >= 12) score++;
+    if (RegExp(r'[0-9]').hasMatch(p) && RegExp(r'[a-zA-Z]').hasMatch(p)) score++;
+    if (RegExp(r'[^a-zA-Z0-9]').hasMatch(p)) score++;
+    return switch (score) { 0 || 1 => 'Weak', 2 => 'Fair', _ => 'Strong' };
   }
 
   @override
@@ -146,6 +208,8 @@ class _SignInScreenState extends State<SignInScreen> {
       _Mode.signUp => 'Create your account',
       _Mode.reset => 'Reset your password',
     };
+    final lockRemaining = _lockRemaining;
+    final strength = _mode == _Mode.signUp ? _passwordStrength() : null;
     return Scaffold(
       backgroundColor: HcColors.forest,
       body: SafeArea(
@@ -158,17 +222,22 @@ class _SignInScreenState extends State<SignInScreen> {
                 padding: const EdgeInsets.fromLTRB(HcSpace.s6, HcSpace.s9, HcSpace.s6, HcSpace.s6),
                 child: Column(
                   children: [
-                    Image.asset('assets/branding/logo.png', width: 96, height: 96),
+                    Semantics(
+                      label: 'Hamduk Chess',
+                      child: ExcludeSemantics(child: Image.asset('assets/branding/logo.png', width: 96, height: 96)),
+                    ),
                     const SizedBox(height: HcSpace.s3),
-                    Text.rich(
-                      TextSpan(children: [
-                        TextSpan(text: 'Hamduk ', style: HcText.displayLg.copyWith(color: HcColors.onForest)),
-                        TextSpan(text: 'Chess', style: HcText.displayLg.copyWith(color: HcColors.brandGold)),
-                      ]),
-                      textAlign: TextAlign.center,
+                    ExcludeSemantics(
+                      child: Text.rich(
+                        TextSpan(children: [
+                          TextSpan(text: 'Hamduk ', style: HcText.displayLg.copyWith(color: HcColors.onForest)),
+                          TextSpan(text: 'Chess', style: HcText.displayLg.copyWith(color: HcColors.brandGold)),
+                        ]),
+                        textAlign: TextAlign.center,
+                      ),
                     ),
                     const SizedBox(height: HcSpace.s2),
-                    Text('Africa-first chess', style: HcText.body.copyWith(color: HcColors.onForest2), textAlign: TextAlign.center),
+                    Text('Chess, Africa first', style: HcText.body.copyWith(color: HcColors.onForest2), textAlign: TextAlign.center),
                     const SizedBox(height: HcSpace.s7),
                     Container(
                       width: double.infinity,
@@ -182,33 +251,54 @@ class _SignInScreenState extends State<SignInScreen> {
                           TextField(
                             controller: _email,
                             keyboardType: TextInputType.emailAddress,
+                            textInputAction: _mode == _Mode.reset ? TextInputAction.done : TextInputAction.next,
                             autofillHints: const [AutofillHints.email],
                             decoration: const InputDecoration(labelText: 'Email'),
+                            onEditingComplete: _validateEmail,
+                            onSubmitted: (_) => _mode == _Mode.reset ? _submit() : _passwordFocus.requestFocus(),
                           ),
                           if (_mode == _Mode.signUp) ...[
                             const SizedBox(height: HcSpace.s3),
                             TextField(
                               controller: _username,
+                              textInputAction: TextInputAction.next,
                               autofillHints: const [AutofillHints.newUsername],
                               decoration: const InputDecoration(
                                 labelText: 'Username (optional)',
                                 helperText: 'Letters, numbers and underscores',
                               ),
+                              onSubmitted: (_) => _passwordFocus.requestFocus(),
                             ),
                           ],
                           if (_mode != _Mode.reset) ...[
                             const SizedBox(height: HcSpace.s3),
                             TextField(
                               controller: _password,
-                              obscureText: true,
+                              focusNode: _passwordFocus,
+                              obscureText: _obscurePassword,
+                              textInputAction: TextInputAction.done,
                               autofillHints: [_mode == _Mode.signUp ? AutofillHints.newPassword : AutofillHints.password],
-                              decoration: const InputDecoration(labelText: 'Password'),
+                              decoration: InputDecoration(
+                                labelText: 'Password',
+                                helperText: strength == null ? null : 'Strength: $strength',
+                                suffixIcon: Semantics(
+                                  label: _obscurePassword ? 'Show password' : 'Hide password',
+                                  child: IconButton(
+                                    icon: Icon(_obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+                                    onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                                  ),
+                                ),
+                              ),
+                              onChanged: _mode == _Mode.signUp ? (_) => setState(() {}) : null,
                               onSubmitted: (_) => _submit(),
                             ),
                           ],
                           if (_error != null) ...[
                             const SizedBox(height: HcSpace.s3),
-                            Text(_error!, style: HcText.bodySm.copyWith(color: hc.dangerInk)),
+                            Semantics(
+                              liveRegion: true,
+                              child: Text(_error!, style: HcText.bodySm.copyWith(color: hc.dangerInk)),
+                            ),
                           ],
                           if (_info != null) ...[
                             const SizedBox(height: HcSpace.s3),
@@ -217,14 +307,16 @@ class _SignInScreenState extends State<SignInScreen> {
                           const SizedBox(height: HcSpace.s5),
                           FilledButton(
                             style: HcButtons.large(),
-                            onPressed: _busy ? null : _submit,
+                            onPressed: _busy || lockRemaining != null ? null : _submit,
                             child: _busy
                                 ? const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                                : Text(switch (_mode) {
-                                    _Mode.signIn => 'Sign in',
-                                    _Mode.signUp => 'Create account',
-                                    _Mode.reset => 'Send reset link',
-                                  }),
+                                : Text(lockRemaining != null
+                                    ? 'Wait ${lockRemaining.inMinutes}:${(lockRemaining.inSeconds % 60).toString().padLeft(2, '0')}'
+                                    : switch (_mode) {
+                                        _Mode.signIn => 'Sign in',
+                                        _Mode.signUp => 'Create account',
+                                        _Mode.reset => 'Send reset link',
+                                      }),
                           ),
                           if (_mode != _Mode.reset) ...[
                             const SizedBox(height: HcSpace.s3),
@@ -254,7 +346,7 @@ class _SignInScreenState extends State<SignInScreen> {
                             if (widget.config.googleWebClientId != null) const SizedBox(height: HcSpace.s2),
                             TextButton(
                               onPressed: _busy ? null : _continueAsGuest,
-                              child: const Text('Continue as guest'),
+                              child: const Text('Play as guest'),
                             ),
                           ],
                           const SizedBox(height: HcSpace.s2),
@@ -263,6 +355,27 @@ class _SignInScreenState extends State<SignInScreen> {
                             TextButton(onPressed: () => _switch(_Mode.reset), child: const Text('Forgot password?')),
                           ] else
                             TextButton(onPressed: () => _switch(_Mode.signIn), child: const Text('Back to sign in')),
+                          if (_mode != _Mode.reset) ...[
+                            const SizedBox(height: HcSpace.s3),
+                            Text.rich(
+                              TextSpan(style: HcText.bodySm.copyWith(color: hc.ink3), children: [
+                                const TextSpan(text: 'By continuing you agree to the '),
+                                TextSpan(
+                                  text: 'Terms',
+                                  style: const TextStyle(decoration: TextDecoration.underline),
+                                  recognizer: TapGestureRecognizer()..onTap = () => _openSite(context, '/terms'),
+                                ),
+                                const TextSpan(text: ' and '),
+                                TextSpan(
+                                  text: 'Privacy Policy',
+                                  style: const TextStyle(decoration: TextDecoration.underline),
+                                  recognizer: TapGestureRecognizer()..onTap = () => _openSite(context, '/privacy'),
+                                ),
+                                const TextSpan(text: '.'),
+                              ]),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -275,4 +388,8 @@ class _SignInScreenState extends State<SignInScreen> {
       ),
     );
   }
+}
+
+void _openSite(BuildContext context, String path) {
+  launchUrl(Uri.parse('$_site$path'), mode: LaunchMode.externalApplication);
 }

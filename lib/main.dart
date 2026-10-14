@@ -9,6 +9,8 @@ import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'auth/mfa_challenge_screen.dart';
+import 'auth/reset_password_screen.dart';
 import 'auth/sign_in_screen.dart';
 import 'bots/bot_results.dart';
 import 'core/app_config.dart';
@@ -105,21 +107,98 @@ class _HamdukChessAppState extends State<HamdukChessApp> {
 }
 
 /// Signed in: the app. Signed out: sign-in. Follows Supabase's session, which it keeps on
-/// the device, so a signed-in player can open the app offline.
-class _AuthGate extends StatelessWidget {
+/// the device, so a signed-in player can open the app offline. Also catches two sessions
+/// that shouldn't reach the app directly: a password-recovery link (shows the "set a new
+/// password" screen instead) and a two-factor account that hasn't entered its code yet.
+class _AuthGate extends StatefulWidget {
   const _AuthGate({required this.config, required this.appVersion});
   final AppConfig config;
   final String appVersion;
+
+  @override
+  State<_AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<_AuthGate> {
+  bool _recovering = false;
+  StreamSubscription<AuthState>? _sub;
+
+  @override
+  void initState() {
+    super.initState();
+    _sub = Supabase.instance.client.auth.onAuthStateChange.listen((s) {
+      if (s.event == AuthChangeEvent.passwordRecovery) setState(() => _recovering = true);
+      if (s.event == AuthChangeEvent.signedOut) setState(() => _recovering = false);
+    });
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final auth = Supabase.instance.client.auth;
     return StreamBuilder<AuthState>(
       stream: auth.onAuthStateChange,
-      builder: (context, _) => auth.currentSession == null
-          ? SignInScreen(config: config)
-          : HomeShell(config: config, appVersion: appVersion),
+      builder: (context, _) {
+        if (auth.currentSession == null) return SignInScreen(config: widget.config);
+        if (_recovering) {
+          return ResetPasswordScreen(onDone: () => setState(() => _recovering = false));
+        }
+        return _MfaCheck(config: widget.config, appVersion: widget.appVersion);
+      },
     );
+  }
+}
+
+/// Checks whether this session still needs a two-factor code before showing the app.
+class _MfaCheck extends StatefulWidget {
+  const _MfaCheck({required this.config, required this.appVersion});
+  final AppConfig config;
+  final String appVersion;
+
+  @override
+  State<_MfaCheck> createState() => _MfaCheckState();
+}
+
+class _MfaCheckState extends State<_MfaCheck> {
+  bool _loading = true;
+  String? _pendingFactorId;
+
+  @override
+  void initState() {
+    super.initState();
+    _check();
+  }
+
+  Future<void> _check() async {
+    final auth = Supabase.instance.client.auth;
+    final aal = auth.mfa.getAuthenticatorAssuranceLevel();
+    String? factorId;
+    if (aal.currentLevel == AuthenticatorAssuranceLevels.aal1 && aal.nextLevel == AuthenticatorAssuranceLevels.aal2) {
+      final factors = await auth.mfa.listFactors();
+      final verified = factors.totp.where((f) => f.status == FactorStatus.verified);
+      factorId = verified.isEmpty ? null : verified.first.id;
+    }
+    if (mounted) {
+      setState(() {
+        _pendingFactorId = factorId;
+        _loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    final factorId = _pendingFactorId;
+    if (factorId != null) {
+      return MfaChallengeScreen(factorId: factorId, onVerified: () => setState(() => _pendingFactorId = null));
+    }
+    return HomeShell(config: widget.config, appVersion: widget.appVersion);
   }
 }
 

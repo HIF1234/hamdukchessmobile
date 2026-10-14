@@ -45,17 +45,22 @@ void main() {
       await t.pumpWidget(MaterialApp(home: SignInScreen(config: _noGoogleConfig)));
     }
 
-    testWidgets('checks the email and password before contacting the server', (t) async {
+    testWidgets('checks the email before contacting the server', (t) async {
       await open(t);
       await t.tap(find.widgetWithText(FilledButton, 'Sign in'));
       await t.pump();
-      expect(find.text('Enter your email address.'), findsOneWidget);
+      expect(find.text('Enter a valid email address.'), findsOneWidget);
+    });
 
-      await t.enterText(find.widgetWithText(TextField, 'Email'), 'ade@example.com');
-      await t.enterText(find.widgetWithText(TextField, 'Password'), '123');
-      await t.tap(find.widgetWithText(FilledButton, 'Sign in'));
+    testWidgets('sign-up requires a longer password', (t) async {
+      await open(t);
+      await t.tap(find.text('New here? Create a free account'));
       await t.pump();
-      expect(find.text('Passwords are at least 6 characters.'), findsOneWidget);
+      await t.enterText(find.widgetWithText(TextField, 'Email'), 'ade@example.com');
+      await t.enterText(find.widgetWithText(TextField, 'Password'), 'short');
+      await t.tap(find.widgetWithText(FilledButton, 'Create account'));
+      await t.pump();
+      expect(find.text('Choose a longer password -- at least 8 characters.'), findsOneWidget);
     });
 
     testWidgets('sign-up asks for a username and checks it', (t) async {
@@ -84,11 +89,11 @@ void main() {
 
     testWidgets('offers continuing as a guest, except on the forgot-password screen', (t) async {
       await open(t);
-      expect(find.text('Continue as guest'), findsOneWidget);
+      expect(find.text('Play as guest'), findsOneWidget);
 
       await t.tap(find.text('Forgot password?'));
       await t.pump();
-      expect(find.text('Continue as guest'), findsNothing);
+      expect(find.text('Play as guest'), findsNothing);
     });
 
     testWidgets('offers passkey sign-in only on the sign-in screen, not sign-up or reset', (t) async {
