@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/app_config.dart';
+import '../core/hc_widgets.dart';
+import '../core/theme.dart';
 import 'google_auth.dart';
+import 'passkey_auth.dart';
 
 const _site = 'https://play.chess.hamduk.com.ng';
 
@@ -49,6 +52,40 @@ class _SignInScreenState extends State<SignInScreen> {
       if (!GoogleAuth.isCancellation(e)) {
         setState(() => _error = 'Google sign-in failed. Try again, or use your email.');
       }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _signInWithPasskey() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+      _info = null;
+    });
+    try {
+      await PasskeyAuth.signIn();
+    } catch (e) {
+      if (!PasskeyAuth.isCancellation(e)) {
+        setState(() => _error = 'Passkey sign-in failed. Try again, or use your email.');
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _continueAsGuest() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+      _info = null;
+    });
+    try {
+      await Supabase.instance.client.auth.signInAnonymously();
+    } on AuthException catch (e) {
+      setState(() => _error = e.message);
+    } catch (_) {
+      setState(() => _error = 'No connection. Check your data or Wi-Fi.');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -103,93 +140,133 @@ class _SignInScreenState extends State<SignInScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context);
+    final hc = context.hc;
     final title = switch (_mode) {
       _Mode.signIn => 'Sign in',
       _Mode.signUp => 'Create your account',
       _Mode.reset => 'Reset your password',
     };
     return Scaffold(
+      backgroundColor: HcColors.forest,
       body: SafeArea(
         child: AutofillGroup(
           child: ListView(
-            padding: const EdgeInsets.all(24),
+            padding: EdgeInsets.zero,
             children: [
-              const SizedBox(height: 40),
-              Text('Hamduk Chess', style: t.textTheme.headlineLarge?.copyWith(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 4),
-              Text(title, style: t.textTheme.titleMedium),
-              const SizedBox(height: 24),
-              TextField(
-                controller: _email,
-                keyboardType: TextInputType.emailAddress,
-                autofillHints: const [AutofillHints.email],
-                decoration: const InputDecoration(labelText: 'Email', border: OutlineInputBorder()),
+              const AsoOkeStrip(),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(HcSpace.s6, HcSpace.s9, HcSpace.s6, HcSpace.s6),
+                child: Column(
+                  children: [
+                    Text.rich(
+                      TextSpan(children: [
+                        TextSpan(text: 'Hamduk ', style: HcText.displayLg.copyWith(color: HcColors.onForest)),
+                        TextSpan(text: 'Chess', style: HcText.displayLg.copyWith(color: HcColors.brandGold)),
+                      ]),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: HcSpace.s2),
+                    Text('Africa-first chess', style: HcText.body.copyWith(color: HcColors.onForest2), textAlign: TextAlign.center),
+                    const SizedBox(height: HcSpace.s7),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(HcSpace.s5),
+                      decoration: BoxDecoration(color: hc.surface, borderRadius: BorderRadius.circular(HcRadius.xl)),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(title, style: HcText.displayMd.copyWith(color: hc.ink), textAlign: TextAlign.center),
+                          const SizedBox(height: HcSpace.s5),
+                          TextField(
+                            controller: _email,
+                            keyboardType: TextInputType.emailAddress,
+                            autofillHints: const [AutofillHints.email],
+                            decoration: const InputDecoration(labelText: 'Email'),
+                          ),
+                          if (_mode == _Mode.signUp) ...[
+                            const SizedBox(height: HcSpace.s3),
+                            TextField(
+                              controller: _username,
+                              autofillHints: const [AutofillHints.newUsername],
+                              decoration: const InputDecoration(
+                                labelText: 'Username (optional)',
+                                helperText: 'Letters, numbers and underscores',
+                              ),
+                            ),
+                          ],
+                          if (_mode != _Mode.reset) ...[
+                            const SizedBox(height: HcSpace.s3),
+                            TextField(
+                              controller: _password,
+                              obscureText: true,
+                              autofillHints: [_mode == _Mode.signUp ? AutofillHints.newPassword : AutofillHints.password],
+                              decoration: const InputDecoration(labelText: 'Password'),
+                              onSubmitted: (_) => _submit(),
+                            ),
+                          ],
+                          if (_error != null) ...[
+                            const SizedBox(height: HcSpace.s3),
+                            Text(_error!, style: HcText.bodySm.copyWith(color: hc.dangerInk)),
+                          ],
+                          if (_info != null) ...[
+                            const SizedBox(height: HcSpace.s3),
+                            Text(_info!, style: HcText.bodySm.copyWith(color: hc.green)),
+                          ],
+                          const SizedBox(height: HcSpace.s5),
+                          FilledButton(
+                            style: HcButtons.large(),
+                            onPressed: _busy ? null : _submit,
+                            child: _busy
+                                ? const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                                : Text(switch (_mode) {
+                                    _Mode.signIn => 'Sign in',
+                                    _Mode.signUp => 'Create account',
+                                    _Mode.reset => 'Send reset link',
+                                  }),
+                          ),
+                          if (_mode != _Mode.reset) ...[
+                            const SizedBox(height: HcSpace.s3),
+                            Row(children: [
+                              Expanded(child: Divider(color: hc.line)),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: HcSpace.s2),
+                                child: Text('or', style: HcText.bodySm.copyWith(color: hc.ink3)),
+                              ),
+                              Expanded(child: Divider(color: hc.line)),
+                            ]),
+                            const SizedBox(height: HcSpace.s3),
+                            if (_mode == _Mode.signIn) ...[
+                              OutlinedButton.icon(
+                                onPressed: _busy ? null : _signInWithPasskey,
+                                icon: const Icon(Icons.fingerprint_rounded, size: 20),
+                                label: const Text('Sign in with a passkey'),
+                              ),
+                              const SizedBox(height: HcSpace.s2),
+                            ],
+                            if (widget.config.googleWebClientId != null)
+                              OutlinedButton.icon(
+                                onPressed: _busy ? null : _signInWithGoogle,
+                                icon: const Icon(Icons.g_mobiledata, size: 28),
+                                label: const Text('Continue with Google'),
+                              ),
+                            if (widget.config.googleWebClientId != null) const SizedBox(height: HcSpace.s2),
+                            TextButton(
+                              onPressed: _busy ? null : _continueAsGuest,
+                              child: const Text('Continue as guest'),
+                            ),
+                          ],
+                          const SizedBox(height: HcSpace.s2),
+                          if (_mode == _Mode.signIn) ...[
+                            TextButton(onPressed: () => _switch(_Mode.signUp), child: const Text('New here? Create a free account')),
+                            TextButton(onPressed: () => _switch(_Mode.reset), child: const Text('Forgot password?')),
+                          ] else
+                            TextButton(onPressed: () => _switch(_Mode.signIn), child: const Text('Back to sign in')),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              if (_mode == _Mode.signUp) ...[
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _username,
-                  autofillHints: const [AutofillHints.newUsername],
-                  decoration: const InputDecoration(
-                    labelText: 'Username (optional)',
-                    helperText: 'Letters, numbers and underscores',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-              ],
-              if (_mode != _Mode.reset) ...[
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _password,
-                  obscureText: true,
-                  autofillHints: [_mode == _Mode.signUp ? AutofillHints.newPassword : AutofillHints.password],
-                  decoration: const InputDecoration(labelText: 'Password', border: OutlineInputBorder()),
-                  onSubmitted: (_) => _submit(),
-                ),
-              ],
-              if (_error != null) ...[
-                const SizedBox(height: 12),
-                Text(_error!, style: TextStyle(color: t.colorScheme.error)),
-              ],
-              if (_info != null) ...[
-                const SizedBox(height: 12),
-                Text(_info!, style: TextStyle(color: t.colorScheme.primary)),
-              ],
-              const SizedBox(height: 20),
-              FilledButton(
-                onPressed: _busy ? null : _submit,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  child: _busy
-                      ? const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                      : Text(switch (_mode) {
-                          _Mode.signIn => 'Sign in',
-                          _Mode.signUp => 'Create account',
-                          _Mode.reset => 'Send reset link',
-                        }),
-                ),
-              ),
-              if (_mode != _Mode.reset && widget.config.googleWebClientId != null) ...[
-                const SizedBox(height: 12),
-                Row(children: [
-                  const Expanded(child: Divider()),
-                  Padding(padding: const EdgeInsets.symmetric(horizontal: 8), child: Text('or', style: t.textTheme.bodySmall)),
-                  const Expanded(child: Divider()),
-                ]),
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  onPressed: _busy ? null : _signInWithGoogle,
-                  icon: const Icon(Icons.g_mobiledata, size: 28),
-                  label: const Text('Continue with Google'),
-                ),
-              ],
-              const SizedBox(height: 12),
-              if (_mode == _Mode.signIn) ...[
-                TextButton(onPressed: () => _switch(_Mode.signUp), child: const Text('New here? Create a free account')),
-                TextButton(onPressed: () => _switch(_Mode.reset), child: const Text('Forgot password?')),
-              ] else
-                TextButton(onPressed: () => _switch(_Mode.signIn), child: const Text('Back to sign in')),
             ],
           ),
         ),

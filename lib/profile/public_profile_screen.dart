@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/api.dart';
+import '../core/hc_widgets.dart';
 import '../core/report_dialog.dart';
+import '../core/theme.dart';
+import '../core/ui.dart';
 import '../games/game_screen.dart';
 import '../social/conversation_screen.dart';
 
@@ -191,34 +194,32 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                             ),
                           ),
                         ],
-                        const SizedBox(height: 20),
-                        Text('Recent games', style: t.textTheme.titleMedium),
-                        const SizedBox(height: 8),
-                        for (final g in games)
-                          Card(
-                            margin: const EdgeInsets.only(bottom: 8),
-                            child: ListTile(
-                              onTap: () {
-                                final me = Supabase.instance.client.auth.currentUser?.id;
-                                if (me == null) return;
-                                Navigator.of(context).push(MaterialPageRoute(
-                                  builder: (_) => GameScreen(gameId: g['id'] as String, myId: me),
-                                ));
-                              },
-                              title: Text('vs ${g['opponent'] ?? '—'}'),
-                              subtitle: Text(g['timeControl'] as String? ?? ''),
-                              trailing: Text(
-                                switch (g['outcome']) {
-                                  'win' => 'Won',
-                                  'loss' => 'Lost',
-                                  'draw' => 'Draw',
-                                  _ => '…',
+                        const SizedBox(height: HcSpace.s7),
+                        const SectionLabel('Recent games'),
+                        if (games.isEmpty)
+                          EmptyState(icon: Icons.history_rounded, title: 'No games yet', body: 'Their finished games will show up here.')
+                        else
+                          HcListGroup(children: [
+                            for (final g in games)
+                              HcListRow(
+                                leading: HcAvatar(name: g['opponent'] as String? ?? '?'),
+                                title: 'vs ${g['opponent'] ?? '—'}',
+                                subtitle: g['timeControl'] as String? ?? '',
+                                trailing: switch (g['outcome']) {
+                                  'win' => const ResultPill(outcome: 'win'),
+                                  'loss' => const ResultPill(outcome: 'loss'),
+                                  'draw' => const ResultPill(outcome: 'draw'),
+                                  _ => const Text('…'),
                                 },
-                                style: TextStyle(fontWeight: FontWeight.bold, color: g['outcome'] == 'win' ? Colors.green.shade700 : null),
+                                onTap: () {
+                                  final me = Supabase.instance.client.auth.currentUser?.id;
+                                  if (me == null) return;
+                                  Navigator.of(context).push(MaterialPageRoute(
+                                    builder: (_) => GameScreen(gameId: g['id'] as String, myId: me),
+                                  ));
+                                },
                               ),
-                            ),
-                          ),
-                        if (games.isEmpty) const Text('No games yet.'),
+                          ]),
                       ],
                     ),
     );

@@ -3,9 +3,10 @@ import 'package:flutter/material.dart';
 
 import '../board/chess_board.dart';
 import '../core/api.dart';
+import '../core/hc_widgets.dart';
 import '../core/settings.dart';
 import '../core/telemetry.dart';
-import '../core/ui.dart';
+import '../core/theme.dart';
 import 'puzzle_session.dart';
 import 'puzzle_store.dart';
 
@@ -44,15 +45,27 @@ class _PuzzlesScreenState extends State<PuzzlesScreen> {
   PuzzleSession? _session;
   bool _syncing = false;
   String? _note;
+  int _streak = 0;
 
   @override
   void initState() {
     super.initState();
     _init();
+    _loadStreak();
     // Sync whenever a connection comes back.
     Connectivity().onConnectivityChanged.listen((r) {
       if (!r.contains(ConnectivityResult.none)) _sync();
     });
+  }
+
+  Future<void> _loadStreak() async {
+    try {
+      final me = await Api.instance.get('/me') as Map;
+      final streak = ((me['puzzles'] as Map?)?['current_streak'] as num?)?.toInt() ?? 0;
+      if (mounted) setState(() => _streak = streak);
+    } catch (_) {
+      // Offline or failed: the hero just shows no streak badge.
+    }
   }
 
   Future<void> _init() async {
@@ -131,22 +144,41 @@ class _PuzzlesScreenState extends State<PuzzlesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context);
+    final hc = context.hc;
     final store = _store;
     final s = _session;
     return ListView(
       padding: EdgeInsets.zero,
       children: [
-        TabHeader(
-          title: 'Puzzles',
-          subtitle: 'Rated tactics, solved offline',
-          trailing: store?.rating != null ? StatBadge(label: 'rating', value: '${store!.rating}', light: true) : null,
+        const ScreenHeader(title: 'Puzzles', subtitle: 'Rated tactics, solved offline'),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(HcSpace.s4, 0, HcSpace.s4, HcSpace.s4),
+          child: HeroCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
+                  Expanded(child: HeroCard.overline('Puzzle rating')),
+                  if (_streak > 0) HcBadge.onHero('$_streak day streak', icon: Icons.local_fire_department_rounded),
+                ]),
+                const SizedBox(height: HcSpace.s1),
+                Text(
+                  store?.rating != null ? hcNumber(store!.rating!) : '—',
+                  style: HcText.ratingXl.copyWith(color: context.hc.gold),
+                ),
+                const SizedBox(height: HcSpace.s4),
+                Row(children: [
+                  HeroCard.tile(label: 'Solved today', value: store == null ? '—' : '${store.solvedToday}'),
+                  const SizedBox(width: HcSpace.s2),
+                  HeroCard.tile(label: 'Ready offline', value: store == null ? '—' : '${store.remaining}'),
+                ]),
+              ],
+            ),
+          ),
         ),
         Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.symmetric(horizontal: HcSpace.s4),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            RatingLadder(rating: store?.rating),
-            const SizedBox(height: 16),
             SizedBox(
               height: 36,
               child: ListView(
@@ -154,51 +186,37 @@ class _PuzzlesScreenState extends State<PuzzlesScreen> {
                 children: [
                   for (final (key, label) in puzzleThemes)
                     Padding(
-                      padding: const EdgeInsets.only(right: 6),
+                      padding: const EdgeInsets.only(right: HcSpace.s2),
                       child: ChoiceChip(label: Text(label), selected: _theme == key, onSelected: (_) => _pickTheme(key)),
                     ),
                 ],
               ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              store == null
-                  ? 'Loading…'
-                  : '${store.remaining} ready offline'
-                      '${store.pendingUploads > 0 ? ' · ${store.pendingUploads} waiting to upload' : ''}'
-                      '${_syncing ? ' · syncing…' : ''}',
-              style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
-            ),
-            if (_note != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(_note!)),
-            const SizedBox(height: 16),
+            const SizedBox(height: HcSpace.s4),
             if (s == null)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 48),
-                child: Column(children: [
-                  const Text('No puzzles downloaded yet. Connect to the internet to get a pack.', textAlign: TextAlign.center),
-                  const SizedBox(height: 12),
-                  FilledButton(onPressed: _sync, child: const Text('Download puzzles')),
-                ]),
+              EmptyState(
+                icon: Icons.extension_rounded,
+                title: 'No puzzles downloaded yet',
+                body: 'Connect to the internet to get a pack. After that, puzzles work offline.',
+                actionLabel: 'Download puzzles',
+                actionIcon: Icons.download_rounded,
+                onAction: _sync,
               )
             else ...[
-              Card(
-                clipBehavior: Clip.antiAlias,
-                margin: EdgeInsets.zero,
-                child: Padding(
-                  padding: const EdgeInsets.all(10),
-                  child: ChessBoardView(
-                    key: ValueKey(s.puzzle.id),
-                    fen: s.fen,
-                    whiteAtBottom: s.whiteToSolve,
-                    lastMove: s.lastMove,
-                    hintSquare: s.hintFrom,
-                    arrow: s.hintTo != null ? (s.hintFrom!, s.hintTo!) : null,
-                    onMove: s.status == PuzzleStatus.playing && !s.awaitingReply ? _onMove : null,
-                    animate: !AppSettings.instance.lowData,
-                  ),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(HcRadius.board),
+                child: ChessBoardView(
+                  key: ValueKey(s.puzzle.id),
+                  fen: s.fen,
+                  whiteAtBottom: s.whiteToSolve,
+                  lastMove: s.lastMove,
+                  hintSquare: s.hintFrom,
+                  arrow: s.hintTo != null ? (s.hintFrom!, s.hintTo!) : null,
+                  onMove: s.status == PuzzleStatus.playing && !s.awaitingReply ? _onMove : null,
+                  animate: !AppSettings.instance.lowData,
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: HcSpace.s3),
               Text(
                 switch (s.status) {
                   PuzzleStatus.playing => '${s.whiteToSolve ? 'White' : 'Black'} to play · rated ${s.puzzle.rating}',
@@ -209,9 +227,9 @@ class _PuzzlesScreenState extends State<PuzzlesScreen> {
                           : 'Solved!',
                   PuzzleStatus.failed => 'Not quite. The best move was ${s.puzzle.solution.first}.',
                 },
-                style: t.textTheme.titleMedium,
+                style: HcText.titleMd.copyWith(color: hc.ink),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: HcSpace.s3),
               Row(children: [
                 if (s.status == PuzzleStatus.playing)
                   TextButton(
@@ -223,6 +241,17 @@ class _PuzzlesScreenState extends State<PuzzlesScreen> {
                   FilledButton(onPressed: () => setState(_nextPuzzle), child: const Text('Next puzzle')),
               ]),
             ],
+            const SizedBox(height: HcSpace.s4),
+            Text(
+              store == null
+                  ? 'Loading…'
+                  : '${store.remaining} ready offline'
+                      '${store.pendingUploads > 0 ? ' · ${store.pendingUploads} waiting to upload' : ''}'
+                      '${_syncing ? ' · syncing…' : ''}',
+              style: HcText.bodySm.copyWith(color: hc.ink3),
+            ),
+            if (_note != null) Padding(padding: const EdgeInsets.only(top: HcSpace.s2), child: Text(_note!, style: HcText.bodySm.copyWith(color: hc.ink2))),
+            const SizedBox(height: HcSpace.s4),
           ]),
         ),
       ],

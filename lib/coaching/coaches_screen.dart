@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../core/api.dart';
+import '../core/hc_widgets.dart';
+import '../core/theme.dart';
 import 'coach_detail_screen.dart';
 
 /// Browse active human coaches (GET /coaches).
@@ -42,99 +44,92 @@ class _CoachesScreenState extends State<CoachesScreen> {
             : _error != null
                 ? Center(child: Padding(padding: const EdgeInsets.all(24), child: Text(_error!, textAlign: TextAlign.center)))
                 : _coaches!.isEmpty
-                    ? ListView(children: const [
-                        Padding(
-                          padding: EdgeInsets.all(32),
-                          child: Center(child: Text('No coaches are active right now.')),
-                        ),
-                      ])
-                    : ListView.builder(
-                        padding: const EdgeInsets.all(16),
-                        itemCount: _coaches!.length,
-                        itemBuilder: (context, i) => _CoachCard(coach: _coaches![i]),
+                    ? EmptyState(
+                        icon: Icons.school_outlined,
+                        title: 'No coaches are active right now',
+                        body: 'Check back soon.',
+                      )
+                    : ListView(
+                        padding: const EdgeInsets.all(HcSpace.s4),
+                        children: [
+                          HcListGroup(children: [for (final c in _coaches!) _CoachRow(coach: c)]),
+                        ],
                       ),
       ),
     );
   }
 }
 
-class _CoachCard extends StatelessWidget {
-  const _CoachCard({required this.coach});
+class _CoachRow extends StatelessWidget {
+  const _CoachRow({required this.coach});
   final Map<String, dynamic> coach;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final rate = ((coach['hourly_rate_kobo'] as int? ?? 0) / 100).round();
+    final hc = context.hc;
+    final rate = (coach['hourly_rate_kobo'] as int? ?? 0);
     final rating = (coach['avg_rating'] as num?)?.toDouble() ?? 0;
     final specialties = (coach['specialties'] as List?)?.cast<String>() ?? const [];
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () => Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => CoachDetailScreen(coachId: coach['id'] as String)),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              CircleAvatar(
-                radius: 24,
-                backgroundColor: theme.colorScheme.primaryContainer,
-                child: Text(
-                  (coach['display_name'] as String? ?? '?').isNotEmpty
-                      ? (coach['display_name'] as String)[0].toUpperCase()
-                      : '?',
-                  style: TextStyle(color: theme.colorScheme.onPrimaryContainer, fontWeight: FontWeight.bold),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(children: [
-                      Expanded(
-                        child: Text(
-                          [coach['fide_title'], coach['display_name']].where((e) => e != null && e != '').join(' '),
-                          style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      if (rating > 0) ...[
-                        Icon(Icons.star, size: 16, color: theme.colorScheme.secondary),
-                        const SizedBox(width: 2),
-                        Text(rating.toStringAsFixed(1), style: theme.textTheme.labelMedium),
-                      ],
-                    ]),
-                    if (coach['fide_elo'] != null)
-                      Text('FIDE ${coach['fide_elo']}', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-                    if (specialties.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 6),
-                        child: Wrap(
-                          spacing: 6,
-                          runSpacing: 4,
-                          children: specialties
-                              .take(3)
-                              .map((s) => Chip(
-                                    label: Text(s, style: theme.textTheme.labelSmall),
-                                    padding: EdgeInsets.zero,
-                                    visualDensity: VisualDensity.compact,
-                                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                  ))
-                              .toList(),
-                        ),
-                      ),
-                    const SizedBox(height: 6),
-                    Text('₦$rate/hr', style: theme.textTheme.titleSmall?.copyWith(color: theme.colorScheme.primary)),
+    final name = coach['display_name'] as String? ?? '?';
+    return InkWell(
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => CoachDetailScreen(coachId: coach['id'] as String)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: HcSpace.s4, vertical: HcSpace.s3),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            HcAvatar(name: name),
+            const SizedBox(width: HcSpace.s3),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    [coach['fide_title'], name].where((e) => e != null && e != '').join(' '),
+                    style: HcText.titleSm.copyWith(color: hc.ink),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (coach['fide_elo'] != null) ...[
+                    const SizedBox(height: 2),
+                    Text('FIDE ${coach['fide_elo']}', style: HcText.bodySm.copyWith(color: hc.ink2)),
                   ],
-                ),
+                  if (specialties.isNotEmpty) ...[
+                    const SizedBox(height: HcSpace.s1),
+                    Wrap(
+                      spacing: HcSpace.s1,
+                      runSpacing: 4,
+                      children: [
+                        for (final s in specialties.take(3))
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: HcSpace.s2, vertical: 2),
+                            decoration: BoxDecoration(color: hc.surface2, borderRadius: BorderRadius.circular(HcRadius.xs)),
+                            child: Text(s, style: HcText.label.copyWith(fontSize: 11, color: hc.ink2)),
+                          ),
+                      ],
+                    ),
+                  ],
+                ],
               ),
-            ],
-          ),
+            ),
+            const SizedBox(width: HcSpace.s3),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (rating > 0)
+                  Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(Icons.star_rounded, size: 14, color: hc.gold),
+                    const SizedBox(width: 2),
+                    Text(rating.toStringAsFixed(1), style: HcText.label.copyWith(fontSize: 12, color: hc.ink2)),
+                  ]),
+                const SizedBox(height: 2),
+                Text('${hcNaira(rate)}/hr', style: HcText.ratingMd.copyWith(color: hc.green)),
+              ],
+            ),
+          ],
         ),
       ),
     );

@@ -50,3 +50,9 @@ What the GPL requires, and where it's done:
 - **No changes** to Stockfish's code. If that ever changes, the modified source must be published.
 
 Get a lawyer to confirm this set-up before the paid launch.
+
+## Fonts (`assets/fonts/`)
+
+DM Sans, Playfair Display, JetBrains Mono and Noto Sans, from Google Fonts, under the SIL Open Font
+License 1.1 (`assets/fonts/OFL-*.txt`). The files are static weights instanced from the variable
+fonts; Noto Sans is subset to Latin, IPA, combining marks and currency symbols.

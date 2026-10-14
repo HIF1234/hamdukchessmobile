@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../core/api.dart';
+import '../core/hc_widgets.dart';
+import '../core/theme.dart';
 import '../core/ui.dart';
 import 'tutorial_screen.dart';
 import 'video_lesson_screen.dart';
@@ -75,22 +77,24 @@ class _LearnScreenState extends State<LearnScreen> {
                     style: t.textTheme.labelMedium?.copyWith(color: t.colorScheme.primary, fontWeight: FontWeight.bold),
                   ),
                 ),
-                for (final tut in topic.value)
-                  Card(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    child: ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: t.colorScheme.primaryContainer,
-                        child: Text('${(tut['steps'] as List).length}', style: TextStyle(color: t.colorScheme.onPrimaryContainer, fontWeight: FontWeight.bold)),
+                HcListGroup(children: [
+                  for (final tut in topic.value)
+                    HcListRow(
+                      leading: Container(
+                        width: HcSize.avatarMd,
+                        height: HcSize.avatarMd,
+                        decoration: BoxDecoration(color: context.hc.greenSoft, borderRadius: BorderRadius.circular(HcRadius.sm)),
+                        alignment: Alignment.center,
+                        child: Text('${(tut['steps'] as List).length}', style: HcText.titleSm.copyWith(color: context.hc.green)),
                       ),
-                      title: Text(tut['title'] as String),
-                      subtitle: Text('${tut['level']} · ${tut['estimatedMinutes']} min'),
-                      trailing: const Icon(Icons.chevron_right),
+                      title: tut['title'] as String,
+                      subtitle: '${tut['level']} · ${tut['estimatedMinutes']} min',
+                      trailing: Icon(Icons.chevron_right_rounded, color: context.hc.ink3),
                       onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => TutorialScreen(tutorial: tut))),
                     ),
-                  ),
+                ]),
               ],
-              const SizedBox(height: 16),
+              const SizedBox(height: HcSpace.s4),
             ],
             if (videos != null) ...[
               const SectionLabel('Video lessons', icon: Icons.play_circle_outline),
@@ -103,23 +107,25 @@ class _LearnScreenState extends State<LearnScreen> {
                     style: t.textTheme.labelMedium?.copyWith(color: t.colorScheme.primary, fontWeight: FontWeight.bold),
                   ),
                 ),
-                for (final v in cat.value)
-                  Card(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    child: ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: t.colorScheme.surfaceContainerHighest,
-                        child: Icon(Icons.play_arrow, color: t.colorScheme.primary),
+                HcListGroup(children: [
+                  for (final v in cat.value)
+                    HcListRow(
+                      leading: Container(
+                        width: HcSize.avatarMd,
+                        height: HcSize.avatarMd,
+                        decoration: BoxDecoration(color: context.hc.surface2, borderRadius: BorderRadius.circular(HcRadius.sm)),
+                        alignment: Alignment.center,
+                        child: Icon(Icons.play_arrow_rounded, color: context.hc.green),
                       ),
-                      title: Text(v['title'] as String),
-                      subtitle: Text('${v['instructor'] ?? v['difficulty']} · ${_duration(v['duration_sec'] as num?)}'),
+                      title: v['title'] as String,
+                      subtitle: '${v['instructor'] ?? v['difficulty']} · ${_duration(v['duration_sec'] as num?)}',
                       trailing: v['is_premium'] == true
-                          ? Icon(Icons.workspace_premium, color: t.colorScheme.secondary, size: 20)
-                          : const Icon(Icons.chevron_right),
+                          ? Icon(Icons.workspace_premium_rounded, color: context.hc.gold, size: 20)
+                          : Icon(Icons.chevron_right_rounded, color: context.hc.ink3),
                       onTap: () => Navigator.of(context)
                           .push(MaterialPageRoute(builder: (_) => VideoLessonScreen(lesson: v, canWatch: v['is_premium'] != true || _tier == 'gold'))),
                     ),
-                  ),
+                ]),
               ],
             ],
           ],

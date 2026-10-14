@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../auth/passkeys_screen.dart';
 import '../coaching/coaches_screen.dart';
 import '../coaching/my_sessions_screen.dart';
 import '../core/api.dart';
+import '../core/hc_widgets.dart';
 import '../core/push.dart';
 import '../core/settings.dart';
 import '../core/theme.dart';
@@ -22,11 +24,17 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   Map<String, dynamic>? _me;
   String? _error;
+  final _settingsKey = GlobalKey();
 
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  void _scrollToSettings() {
+    final ctx = _settingsKey.currentContext;
+    if (ctx != null) Scrollable.ensureVisible(ctx, duration: const Duration(milliseconds: 300));
   }
 
   Future<void> _load() async {
@@ -44,26 +52,62 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final ratings = (_me?['ratings'] as List?) ?? const [];
     final puzzles = _me?['puzzles'] as Map?;
     final username = account?['username'] as String? ?? 'Profile';
+    final streak = (puzzles?['current_streak'] as num?)?.toInt() ?? 0;
+    final tier = account?['tier'] as String?;
+    String ratingFor(String timeControl) {
+      for (final r in ratings.cast<Map>()) {
+        if (r['time_control'] == timeControl) return '${r['rating']}';
+      }
+      return '—';
+    }
+
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
         padding: EdgeInsets.zero,
         children: [
-          TabHeader(
-            title: username,
-            subtitle: account != null ? '${account['country'] ?? 'Unknown'}'.toUpperCase() : null,
-            badges: [
-              if ((puzzles?['current_streak'] as num?) != null && (puzzles!['current_streak'] as num) > 0)
-                HeaderBadge(icon: Icons.local_fire_department, label: '${puzzles['current_streak']} day streak', color: Colors.orangeAccent),
-              if (account != null && account['tier'] != 'free')
-                HeaderBadge(icon: Icons.workspace_premium, label: '${account['tier']}'.toUpperCase(), color: brandGold),
-            ],
-            trailing: CircleAvatar(
-              radius: 26,
-              backgroundColor: Colors.white24,
-              child: Text(
-                username.isNotEmpty ? username[0].toUpperCase() : '?',
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 20),
+          ScreenHeader(
+            title: 'Profile',
+            actions: [IconButton(onPressed: _scrollToSettings, icon: const Icon(Icons.settings_rounded))],
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: HcSpace.s4),
+            child: HeroCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      HcAvatar(name: username, size: HcSize.avatarLg),
+                      const SizedBox(width: HcSpace.s3),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(username, style: HcText.titleLg.copyWith(color: HcColors.onForest)),
+                            if (account != null) HeroCard.sub('${account['country'] ?? 'Unknown'}'),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (streak > 0 || (tier != null && tier != 'free')) ...[
+                    const SizedBox(height: HcSpace.s3),
+                    Wrap(spacing: HcSpace.s2, runSpacing: HcSpace.s2, children: [
+                      if (tier != null && tier != 'free')
+                        HcBadge.onHero(tier.toUpperCase(), icon: Icons.workspace_premium_rounded),
+                      if (streak > 0) HcBadge.onHero('$streak day streak', icon: Icons.local_fire_department_rounded),
+                    ]),
+                  ],
+                  const SizedBox(height: HcSpace.s4),
+                  Row(children: [
+                    Expanded(child: HeroCard.tile(label: 'Rapid', value: ratingFor('rapid'))),
+                    const SizedBox(width: HcSpace.s2),
+                    Expanded(child: HeroCard.tile(label: 'Blitz', value: ratingFor('blitz'))),
+                    const SizedBox(width: HcSpace.s2),
+                    Expanded(child: HeroCard.tile(label: 'Puzzles', value: puzzles == null ? '—' : '${puzzles['rating']}')),
+                  ]),
+                ],
               ),
             ),
           ),
@@ -79,33 +123,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     await _load();
                   },
                 ),
-                const SizedBox(height: 20),
-              ],
-              if (puzzles != null || ratings.isNotEmpty) ...[
-                const SectionLabel('Ratings', icon: Icons.trending_up),
-                GridView.count(
-                  crossAxisCount: 2,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  mainAxisSpacing: 10,
-                  crossAxisSpacing: 10,
-                  childAspectRatio: 2.4,
-                  children: [
-                    if (puzzles != null)
-                      _RatingCard(
-                        label: 'Puzzles',
-                        rating: '${puzzles['rating']}',
-                        detail: '${puzzles['solved_count']} solved · streak ${puzzles['current_streak']}',
-                      ),
-                    for (final r in ratings.cast<Map>())
-                      _RatingCard(
-                        label: '${r['time_control']} ${r['variant'] == 'chess960' ? '960' : ''}'.trim(),
-                        rating: '${r['rating']}',
-                        detail: '${r['games_played']} games',
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 20),
+                const SizedBox(height: HcSpace.s5),
               ],
               OutlinedButton.icon(
                 onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LearnScreen())),
@@ -130,29 +148,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 icon: const Icon(Icons.event_available_outlined),
                 label: const Text('My coaching sessions'),
               ),
-              const SizedBox(height: 20),
-              const SectionLabel('Settings', icon: Icons.settings_outlined),
-              Card(
-                margin: EdgeInsets.zero,
-                child: Column(children: [
-                  ListenableBuilder(
-                    listenable: AppSettings.instance,
-                    builder: (context, _) => SwitchListTile(
-                      title: const Text('Low data mode'),
-                      subtitle: Text('No pictures or animations. This session: ${DataMeter.label}.'),
-                      value: AppSettings.instance.lowData,
-                      onChanged: AppSettings.instance.setLowData,
-                    ),
+              const SizedBox(height: HcSpace.s5),
+              SectionLabel('Settings', icon: Icons.settings_outlined, key: _settingsKey),
+              HcListGroup(children: [
+                ListenableBuilder(
+                  listenable: AppSettings.instance,
+                  builder: (context, _) => HcListRow(
+                    title: 'Low data mode',
+                    subtitle: 'No pictures or animations. This session: ${DataMeter.label}.',
+                    trailing: Switch(value: AppSettings.instance.lowData, onChanged: AppSettings.instance.setLowData),
                   ),
-                  const Divider(height: 1),
-                  ListTile(
-                    title: const Text('About & licences'),
-                    subtitle: const Text('Open-source software used in this app'),
-                    onTap: () => showLicensePage(context: context, applicationName: 'Hamduk Chess'),
+                ),
+                if (Supabase.instance.client.auth.currentUser?.isAnonymous == false)
+                  HcListRow(
+                    title: 'Passkeys',
+                    subtitle: 'Sign in with your face, fingerprint or a security key',
+                    onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PasskeysScreen())),
                   ),
-                ]),
-              ),
-              const SizedBox(height: 20),
+                HcListRow(
+                  title: 'About & licences',
+                  subtitle: 'Open-source software used in this app',
+                  onTap: () => showLicensePage(context: context, applicationName: 'Hamduk Chess'),
+                ),
+              ]),
+              const SizedBox(height: HcSpace.s5),
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton(
@@ -178,55 +197,26 @@ class _SubscriptionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final hc = context.hc;
     final isFree = tier == 'free';
-    return Card(
-      margin: EdgeInsets.zero,
-      color: isFree ? null : theme.colorScheme.primaryContainer,
-      child: ListTile(
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: isFree ? hc.surface : hc.greenSoft,
+        borderRadius: BorderRadius.circular(HcRadius.md),
+        boxShadow: isFree ? HcShadows.e1(hc.brightness) : null,
+      ),
+      child: HcListRow(
         leading: Icon(
-          isFree ? Icons.workspace_premium_outlined : Icons.workspace_premium,
-          color: isFree ? theme.colorScheme.primary : theme.colorScheme.onPrimaryContainer,
+          isFree ? Icons.workspace_premium_outlined : Icons.workspace_premium_rounded,
+          color: isFree ? hc.ink2 : hc.green,
         ),
-        title: Text(
-          isFree ? 'Free plan' : '${tier[0].toUpperCase()}${tier.substring(1)} plan',
-          style: TextStyle(fontWeight: FontWeight.bold, color: isFree ? null : theme.colorScheme.onPrimaryContainer),
-        ),
-        subtitle: Text(
-          isFree ? 'Upgrade for unlimited puzzles and more' : 'Tap to manage your subscription',
-          style: TextStyle(color: isFree ? null : theme.colorScheme.onPrimaryContainer.withValues(alpha: 0.8)),
-        ),
+        title: isFree ? 'Free plan' : '${tier[0].toUpperCase()}${tier.substring(1)} plan',
+        subtitle: isFree ? 'Upgrade for unlimited puzzles and more' : 'Tap to manage your subscription',
         trailing: isFree
             ? FilledButton.tonal(onPressed: onTap, child: const Text('Upgrade'))
-            : Icon(Icons.chevron_right, color: theme.colorScheme.onPrimaryContainer),
+            : Icon(Icons.chevron_right_rounded, color: hc.green),
         onTap: onTap,
-      ),
-    );
-  }
-}
-
-class _RatingCard extends StatelessWidget {
-  const _RatingCard({required this.label, required this.rating, required this.detail});
-  final String label;
-  final String rating;
-  final String detail;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = Theme.of(context);
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(label, style: t.textTheme.labelMedium?.copyWith(color: t.colorScheme.onSurfaceVariant)),
-            Text(rating, style: t.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-            Text(detail, style: t.textTheme.bodySmall, overflow: TextOverflow.ellipsis),
-          ],
-        ),
       ),
     );
   }

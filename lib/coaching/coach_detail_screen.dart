@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../core/api.dart';
+import '../core/hc_widgets.dart';
+import '../core/theme.dart';
 
 const _weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -228,24 +230,23 @@ class _Body extends StatelessWidget {
         if (reviews.isEmpty)
           Text('No reviews yet.', style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant))
         else
-          for (final r in reviews)
-            Card(
-              margin: const EdgeInsets.only(bottom: 8),
-              child: ListTile(
+          HcListGroup(children: [
+            for (final r in reviews)
+              HcListRow(
                 leading: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: List.generate(
                     5,
                     (i) => Icon(
-                      i < (r['rating'] as int) ? Icons.star : Icons.star_border,
+                      i < (r['rating'] as int) ? Icons.star_rounded : Icons.star_border_rounded,
                       size: 16,
-                      color: theme.colorScheme.secondary,
+                      color: context.hc.gold,
                     ),
                   ),
                 ),
-                title: (r['comment'] as String?)?.isNotEmpty == true ? Text(r['comment'] as String) : null,
+                title: (r['comment'] as String?)?.isNotEmpty == true ? r['comment'] as String : 'No comment',
               ),
-            ),
+          ]),
         const SizedBox(height: 80),
       ],
     );

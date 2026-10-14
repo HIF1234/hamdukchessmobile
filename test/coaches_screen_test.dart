@@ -42,7 +42,7 @@ void main() {
     expect(find.text('FM Tunde Adebayo'), findsOneWidget);
     expect(find.text('4.8'), findsOneWidget);
     expect(find.text('FIDE 2250'), findsOneWidget);
-    expect(find.text('₦5000/hr'), findsOneWidget);
+    expect(find.text('₦5,000/hr'), findsOneWidget);
     expect(find.text('Openings'), findsOneWidget);
     expect(find.text('Endgames'), findsOneWidget);
     expect(find.text('Tactics'), findsOneWidget);
@@ -51,7 +51,7 @@ void main() {
 
   testWidgets('shows an empty state when no coaches are active', (t) async {
     await open(t, body: <Object?>[]);
-    expect(find.text('No coaches are active right now.'), findsOneWidget);
+    expect(find.text('No coaches are active right now'), findsOneWidget);
   });
 
   testWidgets('shows an error message when the request fails', (t) async {

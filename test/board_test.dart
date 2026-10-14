@@ -90,7 +90,7 @@ void main() {
     expect(moves, ['e7e5']);
   });
 
-  testWidgets('a pawn reaching the last rank promotes to a queen', (t) async {
+  testWidgets('a pawn reaching the last rank shows a picker; queen first', (t) async {
     String? promo;
     await pump(
       t,
@@ -101,6 +101,8 @@ void main() {
     );
     await tap(t, 'a7');
     await tap(t, 'a8');
+    expect(promo, isNull); // waits for a piece to be picked
+    await tap(t, 'a8'); // the picker's first (queen) tile sits over the promotion square
     expect(promo, 'q');
   });
 

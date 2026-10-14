@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../core/api.dart';
+import '../core/hc_widgets.dart';
+import '../core/theme.dart';
 import '../core/ui.dart';
 import '../profile/public_profile_screen.dart';
 import 'conversation_screen.dart';
@@ -28,9 +30,12 @@ class _SocialScreenState extends State<SocialScreen> with SingleTickerProviderSt
   Widget build(BuildContext context) {
     final t = Theme.of(context);
     return Column(children: [
-      TabHeader(
+      ScreenHeader(
         title: 'Social',
         subtitle: 'Friends, activity and messages',
+        actions: [
+          IconButton(onPressed: () => _tabs.animateTo(0), icon: const Icon(Icons.person_add_alt_1_rounded)),
+        ],
       ),
       Container(
         color: t.colorScheme.surface,
@@ -145,29 +150,34 @@ class _FriendsTabState extends State<_FriendsTab> {
           const SizedBox(height: 20),
           if (incoming.isNotEmpty) ...[
             const SectionLabel('Requests', icon: Icons.person_add_alt_1),
-            for (final r in incoming)
-              Card(
-                margin: const EdgeInsets.only(bottom: 8),
-                child: ListTile(
-                  title: Text(r['username'] as String? ?? 'Player'),
-                  subtitle: Text('Rating ${r['rating'] ?? '—'}'),
+            HcListGroup(children: [
+              for (final r in incoming)
+                HcListRow(
+                  leading: HcAvatar(name: r['username'] as String? ?? '?'),
+                  title: r['username'] as String? ?? 'Player',
+                  subtitle: 'Rating ${r['rating'] ?? '—'}',
                   trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                    IconButton(icon: const Icon(Icons.check, color: Colors.green), onPressed: () => _respond(r['id'] as String, true)),
-                    IconButton(icon: const Icon(Icons.close), onPressed: () => _respond(r['id'] as String, false)),
+                    IconButton(icon: Icon(Icons.check_rounded, color: context.hc.green), onPressed: () => _respond(r['id'] as String, true)),
+                    IconButton(icon: const Icon(Icons.close_rounded), onPressed: () => _respond(r['id'] as String, false)),
                   ]),
                 ),
-              ),
-            const SizedBox(height: 16),
+            ]),
+            const SizedBox(height: HcSpace.s4),
           ],
           const SectionLabel('Friends', icon: Icons.people_outline),
-          if (accepted.isEmpty) Text('No friends yet. Search above or add from a player\'s profile.', style: t.textTheme.bodySmall)
+          if (accepted.isEmpty)
+            EmptyState(
+              icon: Icons.people_outline_rounded,
+              title: 'No friends yet',
+              body: "Search above or add from a player's profile.",
+            )
           else
-            for (final f in accepted)
-              Card(
-                margin: const EdgeInsets.only(bottom: 8),
-                child: ListTile(
-                  title: Text(f['username'] as String? ?? 'Player'),
-                  subtitle: Text('Rating ${f['rating'] ?? '—'}'),
+            HcListGroup(children: [
+              for (final f in accepted)
+                HcListRow(
+                  leading: HcAvatar(name: f['username'] as String? ?? '?'),
+                  title: f['username'] as String? ?? 'Player',
+                  subtitle: 'Rating ${f['rating'] ?? '—'}',
                   onTap: () => Navigator.of(context)
                       .push(MaterialPageRoute(builder: (_) => PublicProfileScreen(username: f['username'] as String))),
                   trailing: IconButton(
@@ -176,12 +186,14 @@ class _FriendsTabState extends State<_FriendsTab> {
                         .push(MaterialPageRoute(builder: (_) => ConversationScreen(username: f['username'] as String))),
                   ),
                 ),
-              ),
+            ]),
           if (outgoing.isNotEmpty) ...[
-            const SizedBox(height: 16),
+            const SizedBox(height: HcSpace.s4),
             const SectionLabel('Sent requests', icon: Icons.schedule_send_outlined),
-            for (final o in outgoing)
-              ListTile(dense: true, title: Text(o['username'] as String? ?? 'Player'), trailing: const Text('Pending')),
+            HcListGroup(children: [
+              for (final o in outgoing)
+                HcListRow(title: o['username'] as String? ?? 'Player', trailing: Text('Pending', style: HcText.bodySm.copyWith(color: context.hc.ink3))),
+            ]),
           ],
         ],
       ),
@@ -217,36 +229,32 @@ class _FeedTabState extends State<_FeedTab> {
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context);
     if (_error != null) return Center(child: Text(_error!));
     final items = _items;
     if (items == null) return const Center(child: CircularProgressIndicator());
     if (items.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Text('Follow players to see their games and achievements here.', textAlign: TextAlign.center, style: t.textTheme.bodyMedium),
-        ),
+      return EmptyState(
+        icon: Icons.bolt_rounded,
+        title: 'No activity yet',
+        body: 'Follow players to see their games and achievements here.',
       );
     }
     return RefreshIndicator(
       onRefresh: _load,
-      child: ListView.builder(
+      child: ListView(
         padding: const EdgeInsets.all(16),
-        itemCount: items.length,
-        itemBuilder: (context, i) {
-          final it = items[i];
-          return Card(
-            margin: const EdgeInsets.only(bottom: 8),
-            child: ListTile(
-              leading: const Icon(Icons.bolt_outlined),
-              title: Text(it['username'] as String? ?? 'Player'),
-              subtitle: Text('${it['type']}'),
-              onTap: () => Navigator.of(context)
-                  .push(MaterialPageRoute(builder: (_) => PublicProfileScreen(username: it['username'] as String))),
-            ),
-          );
-        },
+        children: [
+          HcListGroup(children: [
+            for (final it in items)
+              HcListRow(
+                leading: HcAvatar(name: it['username'] as String? ?? '?'),
+                title: it['username'] as String? ?? 'Player',
+                subtitle: '${it['type']}',
+                onTap: () => Navigator.of(context)
+                    .push(MaterialPageRoute(builder: (_) => PublicProfileScreen(username: it['username'] as String))),
+              ),
+          ]),
+        ],
       ),
     );
   }
@@ -280,40 +288,36 @@ class _MessagesTabState extends State<_MessagesTab> {
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context);
     if (_error != null) return Center(child: Text(_error!));
     final conversations = _conversations;
     if (conversations == null) return const Center(child: CircularProgressIndicator());
     if (conversations.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Text('Message a friend from their profile to start a conversation.', textAlign: TextAlign.center, style: t.textTheme.bodyMedium),
-        ),
+      return EmptyState(
+        icon: Icons.chat_bubble_outline_rounded,
+        title: 'No messages yet',
+        body: 'Message a friend from their profile to start a conversation.',
       );
     }
     return RefreshIndicator(
       onRefresh: _load,
-      child: ListView.builder(
+      child: ListView(
         padding: const EdgeInsets.all(16),
-        itemCount: conversations.length,
-        itemBuilder: (context, i) {
-          final c = conversations[i];
-          final unread = c['unread'] as int? ?? 0;
-          return Card(
-            margin: const EdgeInsets.only(bottom: 8),
-            child: ListTile(
-              title: Text(c['username'] as String? ?? 'Player', style: TextStyle(fontWeight: unread > 0 ? FontWeight.bold : null)),
-              subtitle: Text(c['lastMessage'] as String? ?? '', maxLines: 1, overflow: TextOverflow.ellipsis),
-              trailing: unread > 0 ? CircleAvatar(radius: 11, child: Text('$unread', style: const TextStyle(fontSize: 11))) : null,
-              onTap: () async {
-                await Navigator.of(context)
-                    .push(MaterialPageRoute(builder: (_) => ConversationScreen(username: c['username'] as String)));
-                _load();
-              },
-            ),
-          );
-        },
+        children: [
+          HcListGroup(children: [
+            for (final c in conversations)
+              HcListRow(
+                leading: HcAvatar(name: c['username'] as String? ?? '?'),
+                title: c['username'] as String? ?? 'Player',
+                subtitle: c['lastMessage'] as String? ?? '',
+                trailing: (c['unread'] as int? ?? 0) > 0 ? HcBadge.count(c['unread'] as int) : null,
+                onTap: () async {
+                  await Navigator.of(context)
+                      .push(MaterialPageRoute(builder: (_) => ConversationScreen(username: c['username'] as String)));
+                  _load();
+                },
+              ),
+          ]),
+        ],
       ),
     );
   }

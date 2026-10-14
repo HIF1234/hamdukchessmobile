@@ -1,10 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../board/chess_board.dart';
+import '../core/hc_widgets.dart';
+import '../core/report_dialog.dart';
 import '../core/settings.dart';
+import '../core/theme.dart';
 import '../review/review_screen.dart';
+import '../social/conversation_screen.dart';
 import 'game_controller.dart';
 import 'game_state.dart';
+
+String _categoryName(String category) => category.isEmpty ? '' : '${category[0].toUpperCase()}${category.substring(1)}';
 
 class GameScreen extends StatefulWidget {
   const GameScreen({super.key, required this.gameId, required this.myId, this.gamesPlayed = -1});
@@ -19,24 +26,36 @@ class GameScreen extends StatefulWidget {
 class _GameScreenState extends State<GameScreen> {
   late final GameController c =
       GameController(gameId: widget.gameId, myId: widget.myId, gamesPlayed: widget.gamesPlayed);
+  String? _resultShownFor;
+  bool _sheetOpen = false;
+  bool _flipped = false;
 
   @override
   void initState() {
     super.initState();
     c.start();
-    c.addListener(_showNotice);
+    c.addListener(_onControllerChanged);
   }
 
-  void _showNotice() {
+  void _onControllerChanged() {
     final n = c.notice;
-    if (n == null || !mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(n)));
-    c.clearNotice();
+    if (n != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(n)));
+      c.clearNotice();
+    }
+    final rematch = c.rematchGameId;
+    if (rematch != null && mounted) {
+      c.rematchGameId = null;
+      if (_sheetOpen) Navigator.of(context).pop();
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => GameScreen(gameId: rematch, myId: widget.myId)),
+      );
+    }
   }
 
   @override
   void dispose() {
-    c.removeListener(_showNotice);
+    c.removeListener(_onControllerChanged);
     c.dispose();
     super.dispose();
   }
@@ -48,18 +67,148 @@ class _GameScreenState extends State<GameScreen> {
         title: const Text('Resign this game?'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Keep playing')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Resign')),
+          FilledButton(style: HcButtons.danger(ctx), onPressed: () => Navigator.pop(ctx, true), child: const Text('Resign')),
         ],
       ),
     );
     if (ok == true) await c.resign();
   }
 
+  void _share(GameState g) {
+    SharePlus.instance.share(
+      ShareParams(text: 'Watch my game on Hamduk Chess: https://play.chess.hamduk.com.ng/play/${g.id}'),
+    );
+  }
+
+  Future<void> _report(GameState g) async {
+    final opp = c.opponent;
+    if (opp == null) return;
+    final filed = await showReportDialog(context, targetType: 'user', targetId: opp.id);
+    if (filed && mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Report sent. Thank you.')));
+  }
+
+  String _resultHeadline(GameState g, bool won) {
+    if (g.endReason == 'first_move_timeout' || g.endReason == 'abort') return 'Aborted.';
+    if (g.result == 'draw' || g.winnerId == null) return 'Draw.';
+    return won ? 'You won.' : 'You lost.';
+  }
+
+  String _resultDetail(GameState g, bool won) {
+    final opp = g.white.id == widget.myId ? g.black : g.white;
+    final moves = (g.sanMoves.length / 2).ceil();
+    return switch (g.endReason) {
+      'checkmate' => 'By checkmate in $moves moves against ${opp.username}.',
+      'stalemate' => 'By stalemate.',
+      'draw' => 'By the fifty-move rule or repetition.',
+      'agreement' => 'By agreement.',
+      'resignation' => won ? '${opp.username} resigned.' : 'By resignation.',
+      'flag' => 'On time.',
+      'disconnect' => '${opp.username} didn\'t return in time.',
+      'first_move_timeout' || 'abort' => 'No first move was made in time.',
+      _ => '',
+    };
+  }
+
+  Future<void> _showResult(GameState g) async {
+    if (!mounted) return;
+    final won = g.winnerId == widget.myId;
+    final canReview = !g.chess960 && g.sanMoves.length >= 2;
+    _sheetOpen = true;
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) {
+        final hc = ctx.hc;
+        return Container(
+          decoration: BoxDecoration(color: hc.surface, borderRadius: const BorderRadius.vertical(top: Radius.circular(HcRadius.lg))),
+          child: ResultSheet(
+            overline: 'Game over · ${_categoryName(g.category)} ${g.timeControl}',
+            headline: _resultHeadline(g, won),
+            detail: _resultDetail(g, won),
+            actions: [
+              if (c.isParticipant)
+                ListenableBuilder(
+                  listenable: c,
+                  builder: (context, _) {
+                    final label = c.rematchOfferedByOpponent
+                        ? 'Accept rematch'
+                        : (c.rematchOfferedByMe ? 'Waiting for opponent…' : 'Rematch');
+                    return SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        style: HcButtons.large(),
+                        onPressed: c.rematchOfferedByMe && !c.rematchOfferedByOpponent ? null : c.offerOrAcceptRematch,
+                        icon: const Icon(Icons.replay_rounded),
+                        label: Text(label),
+                      ),
+                    );
+                  },
+                ),
+              if (canReview)
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.tonal(
+                    onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => ReviewScreen(
+                        startFen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+                        sanMoves: g.sanMoves,
+                        whiteAtBottom: c.isWhite,
+                      ),
+                    )),
+                    child: const Text('Review'),
+                  ),
+                ),
+              if (c.isParticipant)
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    onPressed: () {
+                      Navigator.of(ctx).pop();
+                      Navigator.of(context).pop();
+                    },
+                    child: const Text('New opponent'),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+    _sheetOpen = false;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final hc = context.hc;
     return Scaffold(
-      appBar: AppBar(title: const Text('Game')),
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(kToolbarHeight),
+        child: ListenableBuilder(
+        listenable: c,
+        builder: (context, _) {
+          final g = c.game;
+          return AppBar(
+            title: Text(g == null ? 'Game' : '${_categoryName(g.category)} ${g.timeControl} · ${g.rated ? 'Rated' : 'Casual'}'),
+            actions: g == null
+                ? null
+                : [
+                    PopupMenuButton<String>(
+                      onSelected: (choice) {
+                        if (choice == 'share') _share(g);
+                        if (choice == 'report') _report(g);
+                      },
+                      itemBuilder: (context) => [
+                        const PopupMenuItem(value: 'share', child: Text('Share')),
+                        if (c.isParticipant) const PopupMenuItem(value: 'report', child: Text('Report opponent')),
+                      ],
+                    ),
+                  ],
+          );
+        },
+        ),
+      ),
       body: SafeArea(
+        top: false,
         child: ListenableBuilder(
           listenable: c,
           builder: (context, _) {
@@ -69,17 +218,32 @@ class _GameScreenState extends State<GameScreen> {
                 child: c.error != null ? Text(c.error!) : const CircularProgressIndicator(),
               );
             }
+            if (!g.active && _resultShownFor != g.id) {
+              _resultShownFor = g.id;
+              WidgetsBinding.instance.addPostFrameCallback((_) => _showResult(g));
+            }
             final me = c.isWhite ? g.white : g.black;
             final opp = c.opponent!;
-            return ListView(
-              padding: const EdgeInsets.all(12),
+            final spectating = !c.isParticipant;
+            return Column(
               children: [
-                if (!c.connected) const _Banner(text: 'Connection lost. Reconnecting…', warning: true),
-                _PlayerRow(controller: c, player: opp, white: !c.isWhite, presence: c.opponentPresence),
-                const SizedBox(height: 6),
+                MoveListRibbon(san: g.sanMoves, current: g.sanMoves.isEmpty ? -1 : g.sanMoves.length - 1),
+                const SizedBox(height: HcSpace.s2),
+                PlayerBar(
+                  name: opp.username,
+                  rating: opp.rating,
+                  avatar: HcAvatar(name: opp.username),
+                  status: switch (c.opponentPresence) {
+                    OpponentPresence.reconnecting => 'Disconnected, reconnecting…',
+                    OpponentPresence.abandoned => 'Left the game',
+                    OpponentPresence.connected => g.active && g.whiteToMove != c.isWhite ? 'Thinking…' : null,
+                  },
+                  warn: c.opponentPresence != OpponentPresence.connected,
+                  clock: _Clock(c: c, white: !c.isWhite),
+                ),
                 ChessBoardView(
                   fen: c.boardFen,
-                  whiteAtBottom: c.isWhite,
+                  whiteAtBottom: c.isWhite != _flipped,
                   lastMove: c.pending != null ? (c.pending!.from, c.pending!.to) : g.lastMove,
                   playerColor: c.isWhite ? 'w' : 'b',
                   onMove: g.active ? c.play : null,
@@ -88,164 +252,106 @@ class _GameScreenState extends State<GameScreen> {
                   premove: c.premove == null ? null : (c.premove!.$1, c.premove!.$2),
                   animate: !AppSettings.instance.lowData,
                 ),
-                const SizedBox(height: 6),
-                _PlayerRow(controller: c, player: me, white: c.isWhite, presence: null),
-                const SizedBox(height: 8),
-                if (c.isParticipant && c.opponentPresence == OpponentPresence.abandoned && g.active)
-                  _Banner(
-                    text: '${opp.username} has been away for over ${disconnectGrace.inSeconds}s.',
-                    action: ('Claim the game', c.claimAbandoned),
-                    warning: true,
+                PlayerBar(
+                  name: me.username,
+                  rating: me.rating,
+                  avatar: HcAvatar(name: me.username),
+                  status: g.active && g.whiteToMove == c.isWhite ? 'Your move' : null,
+                  clock: _Clock(c: c, white: c.isWhite),
+                ),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.symmetric(horizontal: HcSpace.s4, vertical: HcSpace.s3),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                      if (!c.connected)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: HcSpace.s2),
+                          child: HcBanner(icon: Icons.cloud_off_rounded, text: 'Connection lost. Reconnecting…', tone: HcBannerTone.error),
+                        ),
+                      if (c.isParticipant && c.opponentPresence == OpponentPresence.abandoned && g.active)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: HcSpace.s2),
+                          child: HcBanner(
+                            icon: Icons.person_off_rounded,
+                            text: '${opp.username} has been away for over ${disconnectGrace.inSeconds}s.',
+                            tone: HcBannerTone.error,
+                            actions: [FilledButton(style: HcButtons.small(), onPressed: c.claimAbandoned, child: const Text('Claim the game'))],
+                          ),
+                        ),
+                      if (c.isParticipant && g.active && g.drawOfferBy != null && g.drawOfferBy != widget.myId)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: HcSpace.s2),
+                          child: HcBanner(
+                            icon: Icons.handshake_rounded,
+                            text: '${opp.username} offers a draw',
+                            tone: HcBannerTone.offer,
+                            actions: [
+                              FilledButton(style: HcButtons.small(), onPressed: () => c.answerDraw(true), child: const Text('Accept')),
+                              TextButton(style: HcButtons.small(), onPressed: () => c.answerDraw(false), child: const Text('Decline')),
+                            ],
+                          ),
+                        ),
+                      if (spectating) Text('Spectating', textAlign: TextAlign.center, style: HcText.bodySm.copyWith(color: hc.ink2)),
+                    ]),
                   ),
-                if (c.isParticipant && g.active && g.drawOfferBy != null && g.drawOfferBy != widget.myId)
-                  _Banner(
-                    text: '${opp.username} offers a draw.',
-                    action: ('Accept', () => c.answerDraw(true)),
-                    secondary: ('Decline', () => c.answerDraw(false)),
-                  ),
-                if (!g.active) _Result(game: g, myId: widget.myId),
-                if (!g.active && !g.chess960 && g.sanMoves.length >= 2)
-                  FilledButton.icon(
-                    onPressed: () => Navigator.of(context).push(MaterialPageRoute(
-                      builder: (_) => ReviewScreen(
-                        startFen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
-                        sanMoves: g.sanMoves,
-                        whiteAtBottom: c.isWhite,
-                      ),
-                    )),
-                    icon: const Icon(Icons.analytics_outlined),
-                    label: const Text('Review this game'),
-                  ),
-                if (c.isParticipant && g.active)
-                  Row(children: [
-                    OutlinedButton(
-                      onPressed: g.drawOfferBy == widget.myId ? null : c.offerDraw,
-                      child: Text(g.drawOfferBy == widget.myId ? 'Draw offered' : 'Offer draw'),
-                    ),
-                    const Spacer(),
-                    TextButton(onPressed: _confirmResign, child: const Text('Resign')),
-                  ])
-                else if (!c.isParticipant)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 8),
-                    child: Text('Spectating', textAlign: TextAlign.center),
-                  ),
+                ),
               ],
             );
           },
         ),
       ),
-    );
-  }
-}
-
-class _PlayerRow extends StatelessWidget {
-  const _PlayerRow({required this.controller, required this.player, required this.white, required this.presence});
-  final GameController controller;
-  final Player player;
-  final bool white;
-  final OpponentPresence? presence;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = Theme.of(context);
-    final g = controller.game!;
-    final toMove = g.active && g.whiteToMove == white;
-    final status = switch (presence) {
-      OpponentPresence.reconnecting => 'Disconnected, reconnecting…',
-      OpponentPresence.abandoned => 'Left the game',
-      _ => toMove ? 'Thinking…' : null,
-    };
-    return Row(children: [
-      Expanded(
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('${player.username}${player.rating != null ? ' (${player.rating})' : ''}',
-              style: t.textTheme.titleSmall, overflow: TextOverflow.ellipsis),
-          if (status != null)
-            Text(status,
-                style: t.textTheme.bodySmall?.copyWith(
-                    color: presence == OpponentPresence.connected || presence == null ? null : t.colorScheme.error)),
-        ]),
-      ),
-      // Only the clock listens to the per-tick updates.
-      ValueListenableBuilder<int>(
-        valueListenable: controller.ticks,
-        builder: (context, _, _) {
-          final (w, b) = displayClocks(g, now: DateTime.now(), serverOffset: controller.serverOffset);
-          final ms = white ? w : b;
-          return Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: toMove ? t.colorScheme.primary : t.colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text(formatClock(ms),
-                style: t.textTheme.titleMedium?.copyWith(
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                  color: toMove ? t.colorScheme.onPrimary : null,
-                )),
-          );
+      bottomNavigationBar: ListenableBuilder(
+        listenable: c,
+        builder: (context, _) {
+          final g = c.game;
+          if (g == null) return const SizedBox.shrink();
+          final opp = c.opponent;
+          if (c.isParticipant && g.active) {
+            return GameActionBar(actions: [
+              GameAction(
+                icon: Icons.handshake_rounded,
+                label: g.drawOfferBy == widget.myId ? 'Draw offered' : 'Offer draw',
+                onTap: g.drawOfferBy == widget.myId ? null : c.offerDraw,
+              ),
+              GameAction(icon: Icons.flag_rounded, label: 'Resign', onTap: _confirmResign),
+              GameAction(icon: Icons.swap_vert_rounded, label: 'Flip', onTap: () => setState(() => _flipped = !_flipped)),
+              GameAction(
+                icon: Icons.chat_bubble_rounded,
+                label: 'Chat',
+                onTap: opp == null
+                    ? null
+                    : () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ConversationScreen(username: opp.username))),
+              ),
+            ]);
+          }
+          if (!c.isParticipant) {
+            return GameActionBar(actions: [
+              GameAction(icon: Icons.swap_vert_rounded, label: 'Flip', onTap: () => setState(() => _flipped = !_flipped)),
+              GameAction(icon: Icons.share_rounded, label: 'Share', onTap: () => _share(g)),
+            ]);
+          }
+          return const SizedBox.shrink();
         },
       ),
-    ]);
-  }
-}
-
-String formatClock(int ms) {
-  final total = (ms / 1000).floor();
-  final m = total ~/ 60;
-  final s = (total % 60).toString().padLeft(2, '0');
-  if (ms < 10000) return '$m:$s.${(ms % 1000) ~/ 100}';
-  return '$m:$s';
-}
-
-class _Banner extends StatelessWidget {
-  const _Banner({required this.text, this.action, this.secondary, this.warning = false});
-  final String text;
-  final (String, VoidCallback)? action;
-  final (String, VoidCallback)? secondary;
-  final bool warning;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = Theme.of(context);
-    return Card(
-      color: warning ? t.colorScheme.errorContainer : null,
-      child: Padding(
-        padding: const EdgeInsets.all(10),
-        child: Row(children: [
-          Expanded(child: Text(text)),
-          if (secondary != null) TextButton(onPressed: secondary!.$2, child: Text(secondary!.$1)),
-          if (action != null) FilledButton(onPressed: action!.$2, child: Text(action!.$1)),
-        ]),
-      ),
     );
   }
 }
 
-class _Result extends StatelessWidget {
-  const _Result({required this.game, required this.myId});
-  final GameState game;
-  final String myId;
+class _Clock extends StatelessWidget {
+  const _Clock({required this.c, required this.white});
+  final GameController c;
+  final bool white;
 
   @override
   Widget build(BuildContext context) {
-    final won = game.winnerId == myId;
-    final text = game.endReason == 'first_move_timeout'
-        ? 'Game aborted'
-        : game.result == 'draw' || game.winnerId == null
-            ? 'Game drawn'
-            : won
-                ? 'You won'
-                : 'You lost';
-    final reason = game.endReason == null
-        ? ''
-        : game.endReason == 'first_move_timeout'
-            ? ' · no first move made in time'
-            : ' · ${game.endReason}';
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Text('$text$reason', style: Theme.of(context).textTheme.titleLarge, textAlign: TextAlign.center),
+    return ValueListenableBuilder<int>(
+      valueListenable: c.ticks,
+      builder: (context, _, _) {
+        final g = c.game!;
+        final (w, b) = displayClocks(g, now: DateTime.now(), serverOffset: c.serverOffset);
+        final active = g.active && g.whiteToMove == white;
+        return GameClock(ms: white ? w : b, active: active);
+      },
     );
   }
 }

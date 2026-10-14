@@ -2,12 +2,8 @@ import 'package:chess/chess.dart' as ch;
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
-const _light = Color(0xFFF0D9B5);
-const _dark = Color(0xFFB58863);
-const _lastMove = Color(0x66F6D365);
-const _selected = Color(0x8CF5A623);
-const _dot = Color(0x59141414);
-const _premove = Color(0x802E7DDB);
+import '../core/theme.dart';
+
 const _slide = Duration(milliseconds: 120);
 
 /// Called when the player tries a move. Return true if it was accepted.
@@ -68,6 +64,9 @@ class _ChessBoardViewState extends State<ChessBoardView> with SingleTickerProvid
   String? _dragFrom;
   Offset? _dragPos;
   bool _droppedByHand = false;
+  String? _promoFrom;
+  String? _promoTo;
+  bool _promoByHand = false;
   late final AnimationController _anim = AnimationController(vsync: this, duration: _slide, value: 1);
 
   @override
@@ -155,14 +154,47 @@ class _ChessBoardViewState extends State<ChessBoardView> with SingleTickerProvid
 
   void _tryMove(String from, String to, {bool byHand = false}) {
     final piece = _pieces[from];
-    final promo = piece != null && piece[1] == 'P' && (to[1] == '8' || to[1] == '1') ? 'q' : null;
+    final isPromotion = piece != null && piece[1] == 'P' && (to[1] == '8' || to[1] == '1');
     if (_selectingPremove) {
-      widget.onPremove?.call(from, to, promo);
-    } else {
-      _droppedByHand = byHand;
-      widget.onMove?.call(from, to, promo);
+      // Checked for legality only when it's actually played, so there's no board state yet
+      // to show a picker against; default to a queen, same as before.
+      widget.onPremove?.call(from, to, isPromotion ? 'q' : null);
+      setState(_clearSelection);
+      return;
     }
+    if (isPromotion) {
+      setState(() {
+        _promoFrom = from;
+        _promoTo = to;
+        _promoByHand = byHand;
+        _selectedSq = null;
+        _targets = const {};
+      });
+      return;
+    }
+    _droppedByHand = byHand;
+    widget.onMove?.call(from, to, null);
     setState(_clearSelection);
+  }
+
+  void _choosePromotion(String piece) {
+    final from = _promoFrom!;
+    final to = _promoTo!;
+    _droppedByHand = _promoByHand;
+    widget.onMove?.call(from, to, piece);
+    setState(() {
+      _promoFrom = null;
+      _promoTo = null;
+      _clearSelection();
+    });
+  }
+
+  void _cancelPromotion() {
+    setState(() {
+      _promoFrom = null;
+      _promoTo = null;
+      _clearSelection();
+    });
   }
 
   void _onTap(Offset p, double size) {
@@ -181,6 +213,7 @@ class _ChessBoardViewState extends State<ChessBoardView> with SingleTickerProvid
 
   @override
   Widget build(BuildContext context) {
+    final board = context.hcBoard;
     return AspectRatio(
       aspectRatio: 1,
       child: LayoutBuilder(builder: (context, c) {
@@ -188,8 +221,8 @@ class _ChessBoardViewState extends State<ChessBoardView> with SingleTickerProvid
         final sq = size / 8;
         final pieces = _pieces;
         return GestureDetector(
-          onTapUp: (d) => _onTap(d.localPosition, size),
-          onPanStart: widget.onMove == null && widget.onPremove == null
+          onTapUp: _promoFrom != null ? null : (d) => _onTap(d.localPosition, size),
+          onPanStart: _promoFrom != null || (widget.onMove == null && widget.onPremove == null)
               ? null
               : (d) {
                   final s = _squareAt(d.localPosition, size);
@@ -219,14 +252,15 @@ class _ChessBoardViewState extends State<ChessBoardView> with SingleTickerProvid
             CustomPaint(
               size: Size.square(size),
               painter: _SquaresPainter(
+                board: board,
                 whiteAtBottom: widget.whiteAtBottom,
                 highlights: {
-                  if (widget.lastMove != null) widget.lastMove!.$1: _lastMove,
-                  if (widget.lastMove != null) widget.lastMove!.$2: _lastMove,
-                  ?widget.hintSquare: _selected,
-                  if (widget.premove != null) widget.premove!.$1: _premove,
-                  if (widget.premove != null) widget.premove!.$2: _premove,
-                  ?_selectedSq: _selectingPremove ? _premove : _selected,
+                  if (widget.lastMove != null) widget.lastMove!.$1: board.lastMove,
+                  if (widget.lastMove != null) widget.lastMove!.$2: board.lastMove,
+                  ?widget.hintSquare: board.selected,
+                  if (widget.premove != null) widget.premove!.$1: board.premove,
+                  if (widget.premove != null) widget.premove!.$2: board.premove,
+                  ?_selectedSq: _selectingPremove ? board.premove : board.selected,
                 },
                 // A premove can go almost anywhere, so dots would only be noise.
                 dots: _selectingPremove ? const {} : _targets,
@@ -269,16 +303,80 @@ class _ChessBoardViewState extends State<ChessBoardView> with SingleTickerProvid
                 child: CustomPaint(
                   size: Size.square(size),
                   painter: _ArrowPainter(
+                    color: board.arrow,
                     from: _origin(widget.arrow!.$1, size).translate(sq / 2, sq / 2),
                     to: _origin(widget.arrow!.$2, size).translate(sq / 2, sq / 2),
                     width: sq * 0.14,
                   ),
                 ),
               ),
+            if (_promoFrom != null && _promoTo != null)
+              _PromotionPicker(
+                white: _pieces[_promoFrom]!.startsWith('w'),
+                origin: _origin(_promoTo!, size),
+                squareSize: sq,
+                boardSize: size,
+                onPick: _choosePromotion,
+                onCancel: _cancelPromotion,
+              ),
           ]),
         );
       }),
     );
+  }
+}
+
+/// Shown over the promotion square once a pawn reaches the last rank: queen, knight, rook
+/// and bishop stacked toward the middle of the board so all four stay on it regardless of
+/// orientation. Tapping outside cancels the move.
+class _PromotionPicker extends StatelessWidget {
+  const _PromotionPicker({
+    required this.white,
+    required this.origin,
+    required this.squareSize,
+    required this.boardSize,
+    required this.onPick,
+    required this.onCancel,
+  });
+
+  final bool white;
+  final Offset origin;
+  final double squareSize;
+  final double boardSize;
+  final ValueChanged<String> onPick;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    final hc = context.hc;
+    // The promotion square sits on the board's top or bottom edge; stack the four choices
+    // toward the middle so they never run off the board.
+    final down = origin.dy < boardSize / 2;
+    final color = white ? 'w' : 'b';
+    const pieces = ['Q', 'N', 'R', 'B'];
+    return Stack(children: [
+      GestureDetector(
+        onTap: onCancel,
+        child: Container(width: boardSize, height: boardSize, color: Colors.black.withValues(alpha: 0.5)),
+      ),
+      for (final (i, piece) in pieces.indexed)
+        Positioned(
+          left: origin.dx,
+          top: origin.dy + (down ? i : -i) * squareSize,
+          width: squareSize,
+          height: squareSize,
+          child: DecoratedBox(
+            decoration: BoxDecoration(color: hc.surface, boxShadow: HcShadows.e2(hc.brightness)),
+            child: Material(
+              type: MaterialType.transparency,
+              child: InkWell(
+                onTap: () => onPick(piece.toLowerCase()),
+                child: _PieceImage('$color$piece'),
+              ),
+            ),
+          ),
+        ),
+    ]);
   }
 }
 
@@ -292,6 +390,7 @@ class _PieceImage extends StatelessWidget {
 
 class _SquaresPainter extends CustomPainter {
   _SquaresPainter({
+    required this.board,
     required this.whiteAtBottom,
     required this.highlights,
     required this.dots,
@@ -299,6 +398,7 @@ class _SquaresPainter extends CustomPainter {
     required this.squareSize,
   });
 
+  final HcBoardTheme board;
   final bool whiteAtBottom;
   final Map<String, Color> highlights;
   final Set<String> dots;
@@ -313,12 +413,12 @@ class _SquaresPainter extends CustomPainter {
         final square = '${'abcdefgh'[file]}${rank + 1}';
         final o = origin(square);
         final rect = o & Size.square(squareSize);
-        paint.color = (file + rank) % 2 == 0 ? _dark : _light;
+        paint.color = (file + rank) % 2 == 0 ? board.dark : board.light;
         canvas.drawRect(rect, paint);
         final h = highlights[square];
         if (h != null) canvas.drawRect(rect, paint..color = h);
         if (dots.contains(square)) {
-          canvas.drawCircle(rect.center, squareSize * 0.16, paint..color = _dot);
+          canvas.drawCircle(rect.center, squareSize * 0.16, paint..color = board.moveDot);
         }
       }
     }
@@ -328,9 +428,9 @@ class _SquaresPainter extends CustomPainter {
       final file = whiteAtBottom ? i : 7 - i;
       final rank = whiteAtBottom ? 7 - i : i;
       _label(canvas, 'abcdefgh'[file], Offset((i + 1) * squareSize - squareSize * 0.16, 8 * squareSize - squareSize * 0.24),
-          style.copyWith(color: i % 2 == 0 ? _light : _dark));
+          style.copyWith(color: i % 2 == 0 ? board.light : board.dark));
       _label(canvas, '${rank + 1}', Offset(squareSize * 0.05, i * squareSize + squareSize * 0.03),
-          style.copyWith(color: i % 2 == 0 ? _dark : _light));
+          style.copyWith(color: i % 2 == 0 ? board.dark : board.light));
     }
   }
 
@@ -341,6 +441,7 @@ class _SquaresPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_SquaresPainter old) =>
+      old.board.id != board.id ||
       old.whiteAtBottom != whiteAtBottom ||
       old.dots.length != dots.length ||
       !old.dots.containsAll(dots) ||
@@ -349,12 +450,11 @@ class _SquaresPainter extends CustomPainter {
 
 /// A single arrow between two square centers (e.g. a hint move), lichess-style.
 class _ArrowPainter extends CustomPainter {
-  _ArrowPainter({required this.from, required this.to, required this.width});
+  _ArrowPainter({required this.color, required this.from, required this.to, required this.width});
+  final Color color;
   final Offset from;
   final Offset to;
   final double width;
-
-  static const _color = Color(0xE6F5A623);
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -366,7 +466,7 @@ class _ArrowPainter extends CustomPainter {
     final headLength = width * 2.6;
     final shaftEnd = to - unit * headLength;
     final paint = Paint()
-      ..color = _color
+      ..color = color
       ..strokeWidth = width
       ..strokeCap = StrokeCap.round;
     canvas.drawLine(from, shaftEnd, paint);
@@ -380,11 +480,11 @@ class _ArrowPainter extends CustomPainter {
       ..lineTo(p1.dx, p1.dy)
       ..lineTo(p2.dx, p2.dy)
       ..close();
-    canvas.drawPath(path, Paint()..color = _color);
+    canvas.drawPath(path, Paint()..color = color);
   }
 
   @override
-  bool shouldRepaint(_ArrowPainter old) => old.from != from || old.to != to || old.width != width;
+  bool shouldRepaint(_ArrowPainter old) => old.color != color || old.from != from || old.to != to || old.width != width;
 }
 
 /// Square -> piece code (e.g. "e1" -> "wK") from a FEN, without building a full game.

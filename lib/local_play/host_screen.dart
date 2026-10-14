@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
+import '../core/hc_widgets.dart';
+import '../core/theme.dart';
 import '../core/ui.dart';
 import 'local_network.dart';
 import 'pairing.dart';
@@ -92,6 +94,7 @@ class _HostLocalTournamentScreenState extends State<HostLocalTournamentScreen> {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
+    final hc = context.hc;
     final sorted = _standings.values.toList()..sort((a, b) => b.points.compareTo(a.points));
     return Scaffold(
       appBar: AppBar(title: const Text('Host local tournament')),
@@ -133,19 +136,20 @@ class _HostLocalTournamentScreenState extends State<HostLocalTournamentScreen> {
                     if (_lobby.isEmpty)
                       Text('Waiting for players to join…', style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurfaceVariant))
                     else if (_round == 0)
-                      for (final p in _lobby) ListTile(dense: true, leading: const Icon(Icons.person_outline), title: Text(p.username))
+                      HcListGroup(children: [
+                        for (final p in _lobby) HcListRow(leading: HcAvatar(name: p.username), title: p.username),
+                      ])
                     else
-                      for (final p in _activePairings.values)
-                        ListTile(
-                          dense: true,
-                          leading: const Icon(Icons.sports_esports_outlined),
-                          title: Text(
-                            p.blackId == null
+                      HcListGroup(children: [
+                        for (final p in _activePairings.values)
+                          HcListRow(
+                            leading: Icon(Icons.sports_esports_outlined, color: t.colorScheme.onSurfaceVariant),
+                            title: p.blackId == null
                                 ? '${_standings[p.whiteId]?.username} -- bye'
                                 : '${_standings[p.whiteId]?.username} vs ${_standings[p.blackId]?.username}',
                           ),
-                        ),
-                    const SizedBox(height: 16),
+                      ]),
+                    const SizedBox(height: HcSpace.s4),
                     SizedBox(
                       width: double.infinity,
                       child: FilledButton(
@@ -154,22 +158,16 @@ class _HostLocalTournamentScreenState extends State<HostLocalTournamentScreen> {
                       ),
                     ),
                     if (sorted.isNotEmpty) ...[
-                      const SizedBox(height: 24),
+                      const SizedBox(height: HcSpace.s4),
                       const SectionLabel('Standings', icon: Icons.leaderboard_outlined),
-                      Card(
-                        margin: EdgeInsets.zero,
-                        child: Column(
-                          children: [
-                            for (var i = 0; i < sorted.length; i++)
-                              ListTile(
-                                dense: true,
-                                leading: SizedBox(width: 24, child: Text('${i + 1}', textAlign: TextAlign.center)),
-                                title: Text(sorted[i].username),
-                                trailing: Text('${sorted[i].points}', style: t.textTheme.titleSmall),
-                              ),
-                          ],
-                        ),
-                      ),
+                      HcListGroup(children: [
+                        for (var i = 0; i < sorted.length; i++)
+                          HcListRow(
+                            leading: SizedBox(width: 24, child: Text('${i + 1}', textAlign: TextAlign.center, style: HcText.ratingMd.copyWith(color: hc.ink3))),
+                            title: sorted[i].username,
+                            trailing: Text('${sorted[i].points}', style: HcText.ratingMd.copyWith(color: hc.ink)),
+                          ),
+                      ]),
                     ],
                   ],
                 ),

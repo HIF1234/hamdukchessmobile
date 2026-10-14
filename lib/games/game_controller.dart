@@ -38,6 +38,11 @@ class GameController extends ChangeNotifier with WidgetsBindingObserver {
   (String, String, String?)? premove;
   String? error;
   String? notice;
+  bool rematchOfferedByMe = false;
+  bool rematchOfferedByOpponent = false;
+
+  /// Set once a rematch is accepted; the screen navigates to it.
+  String? rematchGameId;
   bool connected = true; // our own Realtime link
   Duration serverOffset = Duration.zero;
   OpponentPresence opponentPresence = OpponentPresence.connected;
@@ -167,6 +172,8 @@ class GameController extends ChangeNotifier with WidgetsBindingObserver {
       case 'move':
         opponentAwaySince = null;
         opponentPresence = OpponentPresence.connected;
+      case 'rematch_offer':
+        rematchOfferedByOpponent = true;
     }
     _notify();
   }
@@ -299,6 +306,23 @@ class GameController extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> resign() => _action('/games/$gameId/resign');
   Future<void> offerDraw() => _action('/games/$gameId/draw');
   Future<void> answerDraw(bool accept) => _action('/games/$gameId/draw', {'accept': accept});
+
+  /// Offers a rematch, or accepts the opponent's pending offer, swapping colours either way.
+  Future<void> offerOrAcceptRematch() async {
+    try {
+      if (rematchOfferedByOpponent) {
+        final r = await Api.instance.post('/games/$gameId/rematch', {'accept': true}) as Map;
+        rematchGameId = r['gameId'] as String;
+      } else {
+        await Api.instance.post('/games/$gameId/rematch');
+        rematchOfferedByMe = true;
+      }
+      _notify();
+    } on ApiError catch (e) {
+      notice = e.message;
+      _notify();
+    }
+  }
 
   Future<void> claimAbandoned() async {
     try {

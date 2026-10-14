@@ -88,7 +88,7 @@ void main() {
     await t.pumpAndSettle();
 
     expect(find.text('bola'), findsOneWidget);
-    await t.tap(find.byIcon(Icons.check));
+    await t.tap(find.byIcon(Icons.check_rounded));
     await t.pumpAndSettle();
 
     final respondCall = calls.firstWhere((r) => r.url.path.endsWith('/social/friends/respond'));

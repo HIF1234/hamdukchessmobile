@@ -27,6 +27,19 @@ class PuzzleStore {
   int get remaining => _pack.length;
   int get pendingUploads => _queue.length;
 
+  // How many puzzles this device has solved today, across every theme; resets at local
+  // midnight. Puzzles are solved offline-first, so this device is the real source of truth
+  // for "today", not the server's own record of when results were finally uploaded.
+  static const _solvedTodayKey = 'puzzles_solved_today';
+  static int? _sharedSolvedToday;
+  static String? _sharedSolvedTodayDate;
+  int get solvedToday => _sharedSolvedToday ?? 0;
+
+  static String _todayKey() {
+    final n = DateTime.now();
+    return '${n.year}-${n.month.toString().padLeft(2, '0')}-${n.day.toString().padLeft(2, '0')}';
+  }
+
   static Future<PuzzleStore> open([JsonStore? store, String? theme]) async {
     final s = PuzzleStore(store ?? await JsonStore.open(), theme: theme);
     await s._load();
@@ -34,7 +47,11 @@ class PuzzleStore {
   }
 
   /// For tests: forget the in-memory queue so it's read from storage again.
-  static void resetForTests() => _sharedQueue = null;
+  static void resetForTests() {
+    _sharedQueue = null;
+    _sharedSolvedToday = null;
+    _sharedSolvedTodayDate = null;
+  }
 
   Future<void> _load() async {
     final pack = await _store.read(_packKey);
@@ -49,6 +66,22 @@ class PuzzleStore {
       final q = await _store.read(_queueKey);
       _sharedQueue = q is List ? q.map((e) => (e as Map).cast<String, dynamic>()).toList() : [];
     }
+    if (_sharedSolvedToday == null) {
+      final raw = await _store.read(_solvedTodayKey);
+      final today = _todayKey();
+      _sharedSolvedToday = raw is Map && raw['date'] == today ? (raw['count'] as num?)?.toInt() ?? 0 : 0;
+      _sharedSolvedTodayDate = today;
+    }
+  }
+
+  Future<void> _bumpSolvedToday() async {
+    final today = _todayKey();
+    if (_sharedSolvedTodayDate != today) {
+      _sharedSolvedToday = 0;
+      _sharedSolvedTodayDate = today;
+    }
+    _sharedSolvedToday = (_sharedSolvedToday ?? 0) + 1;
+    await _store.write(_solvedTodayKey, {'date': today, 'count': _sharedSolvedToday});
   }
 
   Future<void> _savePack() => _store.write(_packKey, {
@@ -65,7 +98,7 @@ class PuzzleStore {
   Future<void> record(Puzzle p, bool success, {int hintsUsed = 0}) async {
     _pack.removeWhere((x) => x.id == p.id);
     _queue.add({'puzzleId': p.id, 'success': success, 'hintsUsed': hintsUsed});
-    await Future.wait([_savePack(), _store.write(_queueKey, _queue)]);
+    await Future.wait([_savePack(), _store.write(_queueKey, _queue), if (success) _bumpSolvedToday()]);
   }
 
   /// Uploads waiting results (oldest first), then tops the pack up. Safe to call any time;

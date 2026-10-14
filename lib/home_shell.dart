@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'core/app_config.dart';
+import 'core/hc_widgets.dart';
 import 'core/links.dart';
 import 'core/push.dart';
 import 'games/game_screen.dart';
@@ -74,11 +75,15 @@ class _HomeShellState extends State<HomeShell> {
         selectedIndex: _tab,
         onDestinationSelected: (i) => setState(() => _tab = i),
         destinations: const [
-          NavigationDestination(icon: Icon(Icons.extension_outlined), label: 'Puzzles'),
-          NavigationDestination(icon: Icon(Icons.sports_esports_outlined), label: 'Play'),
-          NavigationDestination(icon: Icon(Icons.emoji_events_outlined), label: 'Tournaments'),
-          NavigationDestination(icon: Icon(Icons.people_outline), label: 'Social'),
-          NavigationDestination(icon: Icon(Icons.person_outline), label: 'Profile'),
+          NavigationDestination(icon: Icon(Icons.extension_outlined), selectedIcon: Icon(Icons.extension_rounded), label: 'Puzzles'),
+          NavigationDestination(icon: KnightIcon(), selectedIcon: KnightIcon(), label: 'Play'),
+          NavigationDestination(
+            icon: Icon(Icons.emoji_events_outlined),
+            selectedIcon: Icon(Icons.emoji_events_rounded),
+            label: 'Tournaments',
+          ),
+          NavigationDestination(icon: Icon(Icons.people_outline_rounded), selectedIcon: Icon(Icons.people_rounded), label: 'Social'),
+          NavigationDestination(icon: Icon(Icons.person_outline_rounded), selectedIcon: Icon(Icons.person_rounded), label: 'Profile'),
         ],
       ),
     );

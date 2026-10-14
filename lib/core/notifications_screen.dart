@@ -5,7 +5,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../games/game_screen.dart';
 import 'api.dart';
+import 'hc_widgets.dart';
 import 'links.dart';
+import 'theme.dart';
 
 class _Notice {
   const _Notice({required this.id, required this.title, this.body, this.link, required this.read, required this.at});
@@ -100,26 +102,29 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         child: notices == null && _error == null
             ? const Center(child: CircularProgressIndicator())
             : notices != null && notices.isEmpty
-                ? ListView(children: const [
-                    Padding(
-                      padding: EdgeInsets.symmetric(vertical: 64),
-                      child: Center(child: Text('No notifications yet.')),
-                    ),
-                  ])
+                ? EmptyState(icon: Icons.notifications_none_rounded, title: 'No notifications yet', body: "You'll see game and social updates here.")
                 : ListView(
+                    padding: const EdgeInsets.all(HcSpace.s4),
                     children: [
-                      if (_error != null) Padding(padding: const EdgeInsets.all(16), child: Text(_error!)),
-                      for (final n in notices ?? const <_Notice>[])
-                        ListTile(
-                          onTap: () => _open(n),
-                          leading: CircleAvatar(
-                            backgroundColor: n.read ? null : Theme.of(context).colorScheme.primary,
-                            child: Icon(Icons.notifications, color: n.read ? null : Colors.white, size: 18),
+                      if (_error != null) Padding(padding: const EdgeInsets.only(bottom: HcSpace.s3), child: Text(_error!)),
+                      HcListGroup(children: [
+                        for (final n in notices ?? const <_Notice>[])
+                          HcListRow(
+                            onTap: () => _open(n),
+                            leading: Container(
+                              width: HcSize.avatarMd,
+                              height: HcSize.avatarMd,
+                              decoration: BoxDecoration(
+                                color: n.read ? context.hc.surface2 : context.hc.green,
+                                borderRadius: BorderRadius.circular(HcRadius.sm),
+                              ),
+                              child: Icon(Icons.notifications_rounded, color: n.read ? context.hc.ink2 : context.hc.onGreen, size: 18),
+                            ),
+                            title: n.title,
+                            subtitle: n.body,
+                            trailing: Text(_relative(n.at), style: HcText.bodySm.copyWith(color: context.hc.ink3)),
                           ),
-                          title: Text(n.title, style: TextStyle(fontWeight: n.read ? FontWeight.normal : FontWeight.bold)),
-                          subtitle: n.body != null ? Text(n.body!) : null,
-                          trailing: Text(_relative(n.at), style: Theme.of(context).textTheme.bodySmall),
-                        ),
+                      ]),
                     ],
                   ),
       ),

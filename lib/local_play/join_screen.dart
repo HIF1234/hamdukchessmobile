@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../core/hc_widgets.dart';
+import '../core/theme.dart';
 import '../core/ui.dart';
 import 'local_game_screen.dart';
 import 'local_network.dart';
@@ -90,6 +92,7 @@ class _JoinLocalTournamentScreenState extends State<JoinLocalTournamentScreen> {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
+    final hc = context.hc;
     return Scaffold(
       appBar: AppBar(title: const Text('Join local tournament')),
       body: !_scanned
@@ -128,17 +131,20 @@ class _JoinLocalTournamentScreenState extends State<JoinLocalTournamentScreen> {
                         Text("You're in! Waiting for the host to start a round…", style: t.textTheme.bodyMedium),
                         const SizedBox(height: 16),
                         SectionLabel('Players (${_lobby.length})', icon: Icons.people_outline),
-                        for (final p in _lobby) ListTile(dense: true, leading: const Icon(Icons.person_outline), title: Text(p['username'] as String)),
+                        HcListGroup(children: [
+                          for (final p in _lobby) HcListRow(leading: HcAvatar(name: p['username'] as String), title: p['username'] as String),
+                        ]),
                         if (_standings.isNotEmpty) ...[
-                          const SizedBox(height: 16),
+                          const SizedBox(height: HcSpace.s4),
                           const SectionLabel('Standings', icon: Icons.leaderboard_outlined),
-                          for (var i = 0; i < _standings.length; i++)
-                            ListTile(
-                              dense: true,
-                              leading: SizedBox(width: 24, child: Text('${i + 1}', textAlign: TextAlign.center)),
-                              title: Text(_standings[i]['username'] as String),
-                              trailing: Text('${_standings[i]['points']}'),
-                            ),
+                          HcListGroup(children: [
+                            for (var i = 0; i < _standings.length; i++)
+                              HcListRow(
+                                leading: SizedBox(width: 24, child: Text('${i + 1}', textAlign: TextAlign.center, style: HcText.ratingMd.copyWith(color: hc.ink3))),
+                                title: _standings[i]['username'] as String,
+                                trailing: Text('${_standings[i]['points']}', style: HcText.ratingMd.copyWith(color: hc.ink)),
+                              ),
+                          ]),
                         ],
                       ],
                     ),

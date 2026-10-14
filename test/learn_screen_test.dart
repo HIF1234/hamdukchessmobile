@@ -88,7 +88,7 @@ void main() {
     expect(find.text('Free Lesson'), findsOneWidget);
     expect(find.text('Gold Lesson'), findsOneWidget);
     // Premium lessons get a crown icon instead of a plain chevron.
-    expect(find.byIcon(Icons.workspace_premium), findsOneWidget);
+    expect(find.byIcon(Icons.workspace_premium_rounded), findsOneWidget);
   });
 
   testWidgets('a free lesson plays without a paywall', (t) async {

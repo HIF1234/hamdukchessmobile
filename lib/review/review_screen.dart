@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../board/chess_board.dart';
+import '../core/hc_widgets.dart';
 import '../core/settings.dart';
 import '../core/telemetry.dart';
 import '../engine/device.dart';
@@ -64,14 +65,6 @@ class _ReviewScreenState extends State<ReviewScreen> {
     super.dispose();
   }
 
-  Color _colour(Classification c, ThemeData t) => switch (c) {
-        Classification.blunder => Colors.red,
-        Classification.mistake => Colors.orange,
-        Classification.inaccuracy => Colors.amber.shade700,
-        Classification.best => t.colorScheme.primary,
-        _ => t.colorScheme.onSurfaceVariant,
-      };
-
   String _eval(int cp) {
     if (cp.abs() >= 90000) return cp > 0 ? 'White mates' : 'Black mates';
     final p = cp / 100;
@@ -128,8 +121,12 @@ class _ReviewScreenState extends State<ReviewScreen> {
             child: Padding(
               padding: const EdgeInsets.all(12),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('${(m.ply + 1) ~/ 2}${m.white ? '.' : '...'} ${m.san}  ${m.classification.label}',
-                    style: t.textTheme.titleMedium?.copyWith(color: _colour(m.classification, t))),
+                Row(children: [
+                  ReviewBadge(kind: m.classification.name),
+                  const SizedBox(width: 8),
+                  Text('${(m.ply + 1) ~/ 2}${m.white ? '.' : '...'} ${m.san}  ${m.classification.label}',
+                      style: t.textTheme.titleMedium),
+                ]),
                 Text('Evaluation ${_eval(m.evalAfter)}'),
                 if (m.classification.index >= Classification.inaccuracy.index && m.bestSan != null)
                   Text('Best was ${m.bestSan}'),
@@ -159,8 +156,11 @@ class _ReviewScreenState extends State<ReviewScreen> {
         Wrap(spacing: 4, runSpacing: 4, children: [
           for (final (i, mv) in r.moves.indexed)
             ChoiceChip(
-              label: Text('${mv.white ? '${(mv.ply + 1) ~/ 2}.' : ''}${mv.san}${mv.classification.symbol}',
-                  style: TextStyle(color: _colour(mv.classification, t))),
+              label: Row(mainAxisSize: MainAxisSize.min, children: [
+                ReviewBadge(kind: mv.classification.name, size: 14),
+                const SizedBox(width: 4),
+                Text('${mv.white ? '${(mv.ply + 1) ~/ 2}.' : ''}${mv.san}'),
+              ]),
               selected: _selected == i,
               onSelected: (_) => setState(() => _selected = i),
             ),

@@ -1,183 +1,261 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
-/// Brand palette, kept in sync with the web platform's design system
-/// (`hamdukchess/src/styles.css`) so the app, play.chess and the club dashboard read as one
-/// product. Light-mode values are the exact hex anchors from that file's comment block; the
-/// dark-mode primary/gold are close matches for its brighter oklch values (Flutter has no
-/// built-in oklch support, so these are converted by eye rather than computed).
-const brandGreen = Color(0xFF1A6B3A); // forest green, light surfaces
-const brandGreenBright = Color(0xFF3FA868); // brighter, for dark surfaces
-const brandGold = Color(0xFFF5A623);
-const brandGoldBright = Color(0xFFF0B84A);
-const brandBgDark = Color(0xFF0F0F11);
-const brandBgLight = Color(0xFFFAFAF8);
-const brandTextOnDark = Color(0xFFF0EDE8);
-const brandDanger = Color(0xFFE53E3E);
-const boardLight = Color(0xFFF0D9B5);
-const boardDark = Color(0xFFB58863);
+import 'tokens.dart';
 
-/// Builds the app's full theme for a given [Brightness] -- not just a seed color. Typography
-/// matches the web exactly: Playfair Display for headlines/titles, DM Sans for body/labels.
-ThemeData buildTheme(Brightness brightness) {
-  final isDark = brightness == Brightness.dark;
-  final primary = isDark ? brandGreenBright : brandGreen;
-  final gold = isDark ? brandGoldBright : brandGold;
+export 'tokens.dart';
+
+/// The design system on [ThemeData]: the palette for the current brightness and the board
+/// colours the player picked. Read it through [HcContext].
+@immutable
+class HcTheme extends ThemeExtension<HcTheme> {
+  const HcTheme({required this.palette, this.board = HcBoardThemes.hamduk});
+
+  final HcPalette palette;
+  final HcBoardTheme board;
+
+  @override
+  HcTheme copyWith({HcPalette? palette, HcBoardTheme? board}) =>
+      HcTheme(palette: palette ?? this.palette, board: board ?? this.board);
+
+  @override
+  HcTheme lerp(ThemeExtension<HcTheme>? other, double t) {
+    if (other is! HcTheme) return this;
+    return t < 0.5 ? this : other;
+  }
+}
+
+extension HcContext on BuildContext {
+  /// The current palette: `context.hc.surface2`, `context.hc.goldInk`, …
+  HcPalette get hc {
+    final theme = Theme.of(this);
+    return theme.extension<HcTheme>()?.palette ?? HcPalette.of(theme.brightness);
+  }
+
+  /// The board colours for the player's chosen board theme.
+  HcBoardTheme get hcBoard => Theme.of(this).extension<HcTheme>()?.board ?? HcBoardThemes.hamduk;
+}
+
+/// Builds the whole app theme from the design system tokens.
+ThemeData buildTheme(Brightness brightness, {HcBoardTheme board = HcBoardThemes.hamduk}) {
+  final p = HcPalette.of(brightness);
 
   final scheme = ColorScheme(
     brightness: brightness,
-    primary: primary,
-    onPrimary: isDark ? const Color(0xFF0A1F12) : Colors.white,
-    secondary: gold,
-    onSecondary: isDark ? const Color(0xFF2E2305) : const Color(0xFF2E2305),
-    tertiary: gold,
-    onTertiary: const Color(0xFF2E2305),
-    error: brandDanger,
-    onError: Colors.white,
-    surface: isDark ? const Color(0xFF17171A) : Colors.white,
-    onSurface: isDark ? brandTextOnDark : const Color(0xFF1C1C1F),
-    surfaceContainerHighest: isDark ? const Color(0xFF232327) : const Color(0xFFF1EFEA),
-    onSurfaceVariant: isDark ? const Color(0xFFB4B1AA) : const Color(0xFF5A584F),
-    outline: isDark ? Colors.white.withValues(alpha: 0.14) : const Color(0xFFDDD9D0),
-    outlineVariant: isDark ? Colors.white.withValues(alpha: 0.08) : const Color(0xFFE7E3DA),
-    inverseSurface: isDark ? brandTextOnDark : const Color(0xFF1C1C1F),
-    onInverseSurface: isDark ? const Color(0xFF1C1C1F) : Colors.white,
+    primary: p.green,
+    onPrimary: p.onGreen,
+    primaryContainer: p.greenSoft,
+    onPrimaryContainer: p.green,
+    secondary: p.gold,
+    onSecondary: p.onGold,
+    // Material 3 uses the secondary container for the nav indicator, selected chips and
+    // tonal buttons; in this system those are all green-soft.
+    secondaryContainer: p.greenSoft,
+    onSecondaryContainer: p.green,
+    tertiary: p.gold,
+    onTertiary: p.onGold,
+    tertiaryContainer: p.goldSoft,
+    onTertiaryContainer: p.goldInk,
+    error: p.dangerInk,
+    onError: p.onDanger,
+    errorContainer: p.dangerSoft,
+    onErrorContainer: p.dangerInk,
+    surface: p.surface,
+    onSurface: p.ink,
+    surfaceContainerLowest: p.bg,
+    surfaceContainerLow: p.surface,
+    surfaceContainer: p.surface,
+    surfaceContainerHigh: p.surface2,
+    surfaceContainerHighest: p.surface2,
+    onSurfaceVariant: p.ink2,
+    outline: p.lineControl,
+    outlineVariant: p.line,
+    inverseSurface: p.ink,
+    onInverseSurface: p.bg,
+    inversePrimary: p.isDark ? HcPalette.light.green : HcPalette.dark.green,
     shadow: Colors.black,
     scrim: Colors.black,
+    surfaceTint: Colors.transparent,
   );
 
-  final headlineStyle = GoogleFonts.playfairDisplay(fontWeight: FontWeight.w700);
-  final bodyStyle = GoogleFonts.dmSans();
+  TextStyle ink(TextStyle s, [Color? color]) => s.copyWith(color: color ?? p.ink);
 
   final textTheme = TextTheme(
-    displayLarge: headlineStyle.copyWith(fontSize: 44, height: 1.05),
-    displayMedium: headlineStyle.copyWith(fontSize: 36, height: 1.08),
-    displaySmall: headlineStyle.copyWith(fontSize: 30, height: 1.1),
-    headlineLarge: headlineStyle.copyWith(fontSize: 28),
-    headlineMedium: headlineStyle.copyWith(fontSize: 24),
-    headlineSmall: headlineStyle.copyWith(fontSize: 20),
-    titleLarge: headlineStyle.copyWith(fontSize: 20, fontWeight: FontWeight.w600),
-    titleMedium: bodyStyle.copyWith(fontSize: 16, fontWeight: FontWeight.w600),
-    titleSmall: bodyStyle.copyWith(fontSize: 14, fontWeight: FontWeight.w600),
-    bodyLarge: bodyStyle.copyWith(fontSize: 16),
-    bodyMedium: bodyStyle.copyWith(fontSize: 14),
-    bodySmall: bodyStyle.copyWith(fontSize: 12),
-    labelLarge: bodyStyle.copyWith(fontSize: 14, fontWeight: FontWeight.w600),
-    labelMedium: bodyStyle.copyWith(fontSize: 12, fontWeight: FontWeight.w600, letterSpacing: 0.4),
-    labelSmall: bodyStyle.copyWith(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.4),
-  ).apply(bodyColor: scheme.onSurface, displayColor: scheme.onSurface);
+    displayLarge: ink(HcText.displayXl),
+    displayMedium: ink(HcText.displayLg),
+    displaySmall: ink(HcText.displayMd),
+    headlineLarge: ink(HcText.displayLg),
+    headlineMedium: ink(HcText.displayMd),
+    headlineSmall: ink(HcText.titleLg),
+    titleLarge: ink(HcText.titleLg),
+    titleMedium: ink(HcText.titleMd),
+    titleSmall: ink(HcText.titleSm),
+    bodyLarge: ink(HcText.bodyLg),
+    bodyMedium: ink(HcText.body),
+    bodySmall: ink(HcText.bodySm, p.ink2),
+    labelLarge: ink(HcText.label.copyWith(fontSize: 15, height: 20 / 15, letterSpacing: 0)),
+    labelMedium: ink(HcText.label),
+    labelSmall: ink(HcText.overline.copyWith(letterSpacing: 0.4), p.ink2),
+  );
+
+  final buttonText = HcText.label.copyWith(fontSize: 15, height: 20 / 15, letterSpacing: 0);
+  final buttonShape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(HcRadius.md));
+  const buttonPadding = EdgeInsets.symmetric(horizontal: HcSpace.s5);
+  const buttonSize = Size(64, HcSize.buttonMd);
+  OutlineInputBorder field(Color color, double width) => OutlineInputBorder(
+        borderRadius: BorderRadius.circular(HcRadius.sm),
+        borderSide: BorderSide(color: color, width: width),
+      );
 
   return ThemeData(
     useMaterial3: true,
     brightness: brightness,
     colorScheme: scheme,
-    scaffoldBackgroundColor: isDark ? brandBgDark : brandBgLight,
+    scaffoldBackgroundColor: p.bg,
+    canvasColor: p.bg,
     textTheme: textTheme,
-    fontFamily: bodyStyle.fontFamily,
+    fontFamily: HcFonts.sans,
+    fontFamilyFallback: HcFonts.fallback,
+    iconTheme: IconThemeData(color: p.ink, size: 24),
+    dividerColor: p.line,
+    extensions: <ThemeExtension<dynamic>>[HcTheme(palette: p, board: board)],
     appBarTheme: AppBarTheme(
-      backgroundColor: isDark ? brandBgDark : brandBgLight,
-      foregroundColor: scheme.onSurface,
+      backgroundColor: p.bg,
+      foregroundColor: p.ink,
       elevation: 0,
+      scrolledUnderElevation: 0,
+      surfaceTintColor: Colors.transparent,
       centerTitle: false,
-      titleTextStyle: headlineStyle.copyWith(fontSize: 20, color: scheme.onSurface),
+      toolbarHeight: HcSize.header,
+      titleTextStyle: HcText.titleLg.copyWith(color: p.ink),
     ),
     cardTheme: CardThemeData(
-      color: scheme.surface,
-      elevation: isDark ? 0 : 1,
-      shadowColor: Colors.black.withValues(alpha: 0.08),
+      color: p.surface,
+      elevation: p.isDark ? 0 : 1,
+      shadowColor: const Color(0x1417201A),
       surfaceTintColor: Colors.transparent,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: isDark ? BorderSide(color: Colors.white.withValues(alpha: 0.06)) : BorderSide.none,
-      ),
       margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(HcRadius.md),
+        side: p.isDark ? BorderSide(color: p.line) : BorderSide.none,
+      ),
+    ),
+    // Colours come from the scheme: filled = primary (green), tonal = secondary container
+    // (green-soft). Gold buttons are PlayButton in hc_widgets.dart.
+    filledButtonTheme: FilledButtonThemeData(
+      style: FilledButton.styleFrom(
+        minimumSize: buttonSize,
+        padding: buttonPadding,
+        shape: buttonShape,
+        textStyle: buttonText,
+        elevation: 0,
+      ),
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
-        backgroundColor: primary,
-        foregroundColor: scheme.onPrimary,
+        backgroundColor: p.green,
+        foregroundColor: p.onGreen,
+        minimumSize: buttonSize,
+        padding: buttonPadding,
+        shape: buttonShape,
+        textStyle: buttonText,
         elevation: 0,
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        textStyle: bodyStyle.copyWith(fontSize: 15, fontWeight: FontWeight.w600),
-      ),
-    ),
-    filledButtonTheme: FilledButtonThemeData(
-      style: FilledButton.styleFrom(
-        backgroundColor: gold,
-        foregroundColor: const Color(0xFF2E2305),
-        elevation: 0,
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        textStyle: bodyStyle.copyWith(fontSize: 15, fontWeight: FontWeight.w600),
       ),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
-        foregroundColor: scheme.onSurface,
-        side: BorderSide(color: scheme.outline),
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        textStyle: bodyStyle.copyWith(fontSize: 15, fontWeight: FontWeight.w600),
+        foregroundColor: p.ink,
+        side: BorderSide(color: p.lineControl),
+        minimumSize: buttonSize,
+        padding: buttonPadding,
+        shape: buttonShape,
+        textStyle: buttonText,
       ),
     ),
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
-        foregroundColor: primary,
-        textStyle: bodyStyle.copyWith(fontSize: 15, fontWeight: FontWeight.w600),
+        foregroundColor: p.green,
+        minimumSize: const Size(48, HcSize.buttonMd),
+        padding: const EdgeInsets.symmetric(horizontal: HcSpace.s3),
+        textStyle: buttonText,
       ),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: scheme.surfaceContainerHighest,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: primary, width: 1.5),
-      ),
-      hintStyle: bodyStyle.copyWith(color: scheme.onSurfaceVariant),
+      fillColor: p.surface2,
+      contentPadding: const EdgeInsets.symmetric(horizontal: HcSpace.s3, vertical: 14),
+      border: field(p.lineControl, 1),
+      enabledBorder: field(p.lineControl, 1),
+      focusedBorder: field(p.green, 2),
+      errorBorder: field(p.dangerInk, 2),
+      focusedErrorBorder: field(p.dangerInk, 2),
+      hintStyle: HcText.body.copyWith(color: p.ink3),
+      labelStyle: HcText.label.copyWith(color: p.ink2),
+      helperStyle: HcText.bodySm.copyWith(color: p.ink3),
+      errorStyle: HcText.bodySm.copyWith(color: p.dangerInk),
+      prefixIconColor: p.ink3,
+      suffixIconColor: p.ink3,
     ),
     chipTheme: ChipThemeData(
-      backgroundColor: scheme.surfaceContainerHighest,
-      labelStyle: bodyStyle.copyWith(fontSize: 12, fontWeight: FontWeight.w600, color: scheme.onSurface),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      backgroundColor: p.surface2,
+      selectedColor: p.greenSoft,
+      checkmarkColor: p.green,
+      labelStyle: HcText.label.copyWith(color: p.ink2),
+      secondaryLabelStyle: HcText.label.copyWith(color: p.green),
+      padding: const EdgeInsets.symmetric(horizontal: HcSpace.s2, vertical: 6),
+      shape: const StadiumBorder(),
       side: BorderSide.none,
     ),
-    dividerTheme: DividerThemeData(color: scheme.outlineVariant, thickness: 1, space: 1),
+    dividerTheme: DividerThemeData(color: p.line, thickness: 1, space: 1),
+    listTileTheme: ListTileThemeData(
+      iconColor: p.ink2,
+      titleTextStyle: HcText.titleSm.copyWith(color: p.ink),
+      subtitleTextStyle: HcText.bodySm.copyWith(color: p.ink2),
+    ),
     navigationBarTheme: NavigationBarThemeData(
-      backgroundColor: isDark ? const Color(0xFF17171A) : Colors.white,
-      indicatorColor: primary.withValues(alpha: isDark ? 0.24 : 0.14),
+      backgroundColor: p.surface,
+      indicatorColor: p.greenSoft,
+      indicatorShape: const StadiumBorder(),
       surfaceTintColor: Colors.transparent,
       elevation: 0,
-      height: 64,
+      height: HcSize.nav,
       labelTextStyle: WidgetStateProperty.resolveWith((states) {
         final selected = states.contains(WidgetState.selected);
-        return bodyStyle.copyWith(
+        return HcText.label.copyWith(
           fontSize: 12,
           fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-          color: selected ? primary : scheme.onSurfaceVariant,
+          color: selected ? p.ink : p.ink2,
         );
       }),
       iconTheme: WidgetStateProperty.resolveWith((states) {
         final selected = states.contains(WidgetState.selected);
-        return IconThemeData(color: selected ? primary : scheme.onSurfaceVariant);
+        return IconThemeData(color: selected ? p.green : p.ink2, size: 24);
       }),
     ),
+    bottomSheetTheme: BottomSheetThemeData(
+      backgroundColor: p.surface,
+      modalBackgroundColor: p.surface,
+      surfaceTintColor: Colors.transparent,
+      showDragHandle: true,
+      dragHandleColor: p.surface3,
+      dragHandleSize: const Size(36, 4),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(HcRadius.lg)),
+      ),
+    ),
     dialogTheme: DialogThemeData(
-      backgroundColor: scheme.surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      titleTextStyle: headlineStyle.copyWith(fontSize: 20, color: scheme.onSurface),
+      backgroundColor: p.surface,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(HcRadius.lg)),
+      titleTextStyle: HcText.displayMd.copyWith(color: p.ink),
+      contentTextStyle: HcText.body.copyWith(color: p.ink2),
     ),
     snackBarTheme: SnackBarThemeData(
-      backgroundColor: isDark ? const Color(0xFF232327) : const Color(0xFF1C1C1F),
-      contentTextStyle: bodyStyle.copyWith(color: Colors.white),
+      backgroundColor: p.isDark ? p.surface3 : HcPalette.dark.surface,
+      contentTextStyle: HcText.body.copyWith(color: HcPalette.dark.ink),
+      actionTextColor: HcPalette.dark.green,
       behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(HcRadius.md)),
     ),
-    progressIndicatorTheme: ProgressIndicatorThemeData(color: primary),
-    dividerColor: scheme.outlineVariant,
+    progressIndicatorTheme: ProgressIndicatorThemeData(color: p.green),
   );
 }

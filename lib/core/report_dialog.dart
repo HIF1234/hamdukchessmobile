@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'api.dart';
+import 'theme.dart';
 
 /// Shows the report dialog for [targetType]/[targetId] (matching POST /report's shape), fetching
 /// the valid reasons from the server rather than hardcoding a copy of them in the app. Returns
@@ -104,7 +105,7 @@ class _ReportDialogState extends State<_ReportDialog> {
             maxLines: 3,
             decoration: const InputDecoration(hintText: 'Anything else that would help (optional)', isDense: true),
           ),
-          if (_error != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(_error!, style: const TextStyle(color: Colors.red))),
+          if (_error != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(_error!, style: TextStyle(color: context.hc.dangerInk))),
         ],
       ),
       actions: [

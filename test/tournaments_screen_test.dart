@@ -61,7 +61,8 @@ void main() {
 
   testWidgets('groups tournaments into Live/Scheduled/Completed sections', (t) async {
     await open(t);
-    expect(find.text('Lagos Open'), findsOneWidget);
+    // Lagos Open is live, so it also appears in the featured HeroCard above the sections.
+    expect(find.text('Lagos Open'), findsNWidgets(2));
     expect(find.text('Gold Arena'), findsOneWidget);
     // SectionLabel renders its text upper-cased.
     expect(find.text('LIVE NOW'), findsOneWidget);

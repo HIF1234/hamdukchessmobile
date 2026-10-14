@@ -27,6 +27,7 @@ class GameState {
     this.drawOfferBy,
     this.timeControl = '',
     this.chess960 = false,
+    this.rated = true,
   });
 
   final String id;
@@ -45,9 +46,23 @@ class GameState {
   final String? drawOfferBy;
   final String timeControl;
   final bool chess960;
+  final bool rated;
 
   bool get active => status == 'active';
   bool get whiteToMove => fen.split(' ')[1] == 'w';
+
+  /// "bullet", "blitz", "rapid" or "classical", from [timeControl] ("10+0") by the same
+  /// initial + 40*increment thresholds /config uses to categorise its time controls.
+  String get category {
+    final parts = timeControl.split('+');
+    final minutes = int.tryParse(parts.isEmpty ? '' : parts[0]) ?? 0;
+    final increment = parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0;
+    final estimate = minutes * 60 + 40 * increment;
+    if (estimate < 180) return 'bullet';
+    if (estimate < 600) return 'blitz';
+    if (estimate < 1500) return 'rapid';
+    return 'classical';
+  }
 
   static Player _player(String id, Object? p) {
     final m = p is Map ? p : const {};
@@ -72,6 +87,7 @@ class GameState {
         drawOfferBy: j['draw_offer_by'] as String?,
         timeControl: j['time_control'] as String? ?? '',
         chess960: j['chess960_start_fen'] != null,
+        rated: j['rated'] as bool? ?? true,
       );
 
   /// A Realtime update of the games row. It has no player names, so those are kept.
@@ -92,6 +108,7 @@ class GameState {
         drawOfferBy: row['draw_offer_by'] as String?,
         timeControl: timeControl,
         chess960: chess960,
+        rated: rated,
       );
 
   /// All moves in SAN, read from the PGN (for game review).

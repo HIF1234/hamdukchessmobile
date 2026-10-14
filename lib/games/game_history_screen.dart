@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/api.dart';
+import '../core/hc_widgets.dart';
+import '../core/theme.dart';
 import '../core/ui.dart';
 import 'game_screen.dart';
 import 'game_state.dart';
@@ -59,19 +61,17 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
             : ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  if (_error != null) Padding(padding: const EdgeInsets.only(bottom: 12), child: Text(_error!)),
+                  if (_error != null) Padding(padding: const EdgeInsets.only(bottom: HcSpace.s3), child: Text(_error!)),
                   if (active != null && active.isNotEmpty) ...[
                     const SectionLabel('In progress', icon: Icons.play_circle_outline),
-                    for (final g in active) _GameRow(game: g, onTap: () => _open(g)),
-                    const SizedBox(height: 20),
+                    HcListGroup(children: [for (final g in active) _GameRow(game: g, onTap: () => _open(g))]),
+                    const SizedBox(height: HcSpace.s5),
                   ],
                   const SectionLabel('Recent games', icon: Icons.history),
                   if (recent != null && recent.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 24),
-                      child: Text('No finished games yet.', style: Theme.of(context).textTheme.bodyMedium),
-                    ),
-                  for (final g in recent ?? const <GameState>[]) _GameRow(game: g, onTap: () => _open(g)),
+                    EmptyState(icon: Icons.history_rounded, title: 'No finished games yet', body: 'Your results will show up here.')
+                  else if (recent != null)
+                    HcListGroup(children: [for (final g in recent) _GameRow(game: g, onTap: () => _open(g))]),
                 ],
               ),
       ),
@@ -86,34 +86,23 @@ class _GameRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context);
+    final hc = context.hc;
     final me = Supabase.instance.client.auth.currentUser?.id;
     final isWhite = me == game.white.id;
     final opponent = isWhite ? game.black : game.white;
-    final String resultLabel;
-    final Color? resultColor;
+    final Widget trailing;
     if (game.active) {
-      resultLabel = 'In progress';
-      resultColor = t.colorScheme.primary;
-    } else if (game.result == 'draw') {
-      resultLabel = 'Draw';
-      resultColor = t.colorScheme.onSurfaceVariant;
-    } else if (game.winnerId == me) {
-      resultLabel = 'Won';
-      resultColor = Colors.green.shade700;
+      trailing = Text('In progress', style: HcText.label.copyWith(color: hc.green));
     } else {
-      resultLabel = 'Lost';
-      resultColor = t.colorScheme.error;
+      final outcome = game.result == 'draw' ? 'draw' : (game.winnerId == me ? 'win' : 'loss');
+      trailing = ResultPill(outcome: outcome);
     }
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: ListTile(
-        onTap: onTap,
-        leading: CircleAvatar(child: Text(opponent.username.isNotEmpty ? opponent.username[0].toUpperCase() : '?')),
-        title: Text('vs ${opponent.username}', style: const TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text(game.timeControl.isEmpty ? 'Correspondence' : game.timeControl),
-        trailing: Text(resultLabel, style: t.textTheme.bodyMedium?.copyWith(color: resultColor, fontWeight: FontWeight.bold)),
-      ),
+    return HcListRow(
+      onTap: onTap,
+      leading: HcAvatar(name: opponent.username),
+      title: 'vs ${opponent.username}',
+      subtitle: game.timeControl.isEmpty ? 'Correspondence' : game.timeControl,
+      trailing: trailing,
     );
   }
 }

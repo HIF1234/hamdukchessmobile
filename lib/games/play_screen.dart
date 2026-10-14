@@ -5,25 +5,24 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/api.dart';
 import '../core/app_config.dart';
+import '../core/hc_widgets.dart';
 import '../core/notifications_screen.dart';
 import '../core/settings.dart';
 import '../core/storage.dart';
+import '../core/theme.dart';
 import '../core/ui.dart';
 import '../bots/bot_game_screen.dart';
 import '../engine/device.dart';
+import '../profile/subscription_sheet.dart';
 import 'challenge_screens.dart';
 import 'game_history_screen.dart';
 import 'game_screen.dart';
 import 'spectate_screen.dart';
 
-/// A small icon per time-control category so the picker reads at a glance instead of as
-/// plain text buttons.
-IconData _categoryIcon(String category) => switch (category) {
-      'bullet' => Icons.flash_on,
-      'blitz' => Icons.bolt,
-      'rapid' => Icons.timer_outlined,
-      _ => Icons.hourglass_empty,
-    };
+String _categoryName(String category) => category.isEmpty ? '' : '${category[0].toUpperCase()}${category.substring(1)}';
+
+/// "10+0" -> "10 min" for the Quick game headline.
+String _quickGameLabel(String id) => '${id.split('+').first} min';
 
 /// Pick a time control and find an opponent. Works like the website: ask the server every
 /// few seconds, and also listen for our new game so pairing shows the moment it happens.
@@ -47,14 +46,33 @@ class _PlayScreenState extends State<PlayScreen> {
   int _gamesPlayed = -1; // for the spec §10 cohort; -1 until known
   String _tier = 'free'; // decides which bots are unlocked; cached for offline use
   bool _lowMemory = false;
+  String _lastTimeControl = '10+0'; // Quick game defaults to 10+0 on first launch
+  int _unread = 0;
 
   @override
   void initState() {
     super.initState();
     _loadMe();
+    _loadLastTimeControl();
+    _loadUnread();
     Device.isLowMemory().then((v) {
       if (mounted) setState(() => _lowMemory = v);
     }).catchError((_) {});
+  }
+
+  Future<void> _loadUnread() async {
+    try {
+      final r = await Api.instance.get('/notifications') as Map;
+      if (mounted) setState(() => _unread = (r['unread'] as num?)?.toInt() ?? 0);
+    } catch (_) {
+      // Offline or failed: the bell just shows no count.
+    }
+  }
+
+  Future<void> _loadLastTimeControl() async {
+    final store = await JsonStore.open();
+    final cached = await store.read('last_time_control');
+    if (cached is String && mounted) setState(() => _lastTimeControl = cached);
   }
 
   Future<void> _loadMe() async {
@@ -122,20 +140,71 @@ class _PlayScreenState extends State<PlayScreen> {
   }
 
   Future<void> _playBot(Map<String, dynamic> bot) async {
-    final side = await showModalBottomSheet<String>(
+    var side = 'random';
+    final go = await showModalBottomSheet<bool>(
       context: context,
-      builder: (ctx) => SafeArea(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          ListTile(title: Text('Play ${bot['name']} as…')),
-          ListTile(title: const Text('White'), onTap: () => Navigator.pop(ctx, 'w')),
-          ListTile(title: const Text('Black'), onTap: () => Navigator.pop(ctx, 'b')),
-          ListTile(title: const Text('Random'), onTap: () => Navigator.pop(ctx, DateTime.now().millisecond.isEven ? 'w' : 'b')),
-        ]),
+      isScrollControlled: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, set) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(HcSpace.s5),
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Row(children: [
+                SizedBox(
+                  width: 96,
+                  height: 96,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(HcRadius.md),
+                    child: ColoredBox(
+                      color: hcStageFor(bot['rating'] as num),
+                      child: AppSettings.instance.lowData
+                          ? Center(child: Text(hcInitials(bot['name'] as String), style: HcText.ratingXl.copyWith(color: HcColors.forest)))
+                          : Image.network(bot['portraitUrl'] as String, fit: BoxFit.cover, color: hcStageFor(bot['rating'] as num),
+                              colorBlendMode: BlendMode.multiply),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: HcSpace.s4),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(bot['name'] as String, style: HcText.displayMd.copyWith(color: ctx.hc.ink)),
+                      const SizedBox(height: 2),
+                      Row(children: [
+                        Icon(Icons.location_on_outlined, size: 14, color: ctx.hc.ink2),
+                        const SizedBox(width: 2),
+                        Expanded(
+                            child: Text('${bot['hometown']} · ${hcNumber((bot['rating'] as num).toInt())}',
+                                style: HcText.bodySm.copyWith(color: ctx.hc.ink2), overflow: TextOverflow.ellipsis)),
+                      ]),
+                    ],
+                  ),
+                ),
+              ]),
+              const SizedBox(height: HcSpace.s4),
+              Text('“${bot['catchphrase']}”', style: HcText.bodySm.copyWith(color: ctx.hc.ink3)),
+              const SizedBox(height: HcSpace.s5),
+              SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment(value: 'w', label: Text('White')),
+                  ButtonSegment(value: 'random', label: Text('Random')),
+                  ButtonSegment(value: 'b', label: Text('Black')),
+                ],
+                selected: {side},
+                onSelectionChanged: (s) => set(() => side = s.first),
+              ),
+              const SizedBox(height: HcSpace.s4),
+              PlayButton(label: 'Play ${bot['name']}', onPressed: () => Navigator.pop(ctx, true)),
+            ]),
+          ),
+        ),
       ),
     );
-    if (side == null || !mounted) return;
+    if (go != true || !mounted) return;
+    final playWhite = side == 'random' ? DateTime.now().millisecond.isEven : side == 'w';
     await Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => BotGameScreen(bot: bot, playWhite: side == 'w'),
+      builder: (_) => BotGameScreen(bot: bot, playWhite: playWhite),
     ));
   }
 
@@ -146,7 +215,9 @@ class _PlayScreenState extends State<PlayScreen> {
       _seeking = tc;
       _since = DateTime.now();
       _error = null;
+      _lastTimeControl = tc;
     });
+    JsonStore.open().then((store) => store.write('last_time_control', tc));
     _listenForGame();
     await _ask();
     _timer = Timer.periodic(_poll, (_) async {
@@ -236,119 +307,144 @@ class _PlayScreenState extends State<PlayScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context);
+    final hc = context.hc;
     final tcs = widget.config.timeControls;
+    final quickGame = tcs.firstWhere((t) => t['id'] == _lastTimeControl, orElse: () => tcs.firstWhere((t) => t['id'] == '10+0', orElse: () => tcs.first));
     return ListView(
       padding: EdgeInsets.zero,
       children: [
-        TabHeader(
+        ScreenHeader(
           title: 'Play',
           subtitle: 'Find an opponent or train against a bot',
-          trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-            IconButton(
-              icon: const Icon(Icons.notifications_outlined, color: Colors.white),
-              onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NotificationsScreen())),
+          actions: [
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.notifications_none_rounded),
+                  onPressed: () => Navigator.of(context)
+                      .push(MaterialPageRoute(builder: (_) => const NotificationsScreen()))
+                      .then((_) => _loadUnread()),
+                ),
+                if (_unread > 0) Positioned(top: 6, right: 6, child: HcBadge.count(_unread)),
+              ],
             ),
             IconButton(
-              icon: const Icon(Icons.history, color: Colors.white),
+              icon: const Icon(Icons.history_rounded),
               onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const GameHistoryScreen())),
             ),
-          ]),
+          ],
         ),
         Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(HcSpace.s4, 0, HcSpace.s4, HcSpace.s4),
+          child: HeroCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                HeroCard.overline('Quick game'),
+                const SizedBox(height: HcSpace.s1),
+                Text(_quickGameLabel(quickGame['id'] as String), style: HcText.displayXl.copyWith(color: HcColors.onForest)),
+                const SizedBox(height: 2),
+                HeroCard.sub('${_categoryName(quickGame['category'] as String)} · rated · your last time control'),
+                const SizedBox(height: HcSpace.s4),
+                PlayButton(label: 'Play', onPressed: _seeking == null ? () => _seek(quickGame['id'] as String) : null),
+              ],
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: HcSpace.s4),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            if (_seeking != null)
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(children: [
-                    const SizedBox.square(dimension: 20, child: CircularProgressIndicator(strokeWidth: 2)),
-                    const SizedBox(width: 12),
-                    Expanded(child: Text('Finding a $_seeking opponent…')),
-                    TextButton(onPressed: () => _cancel(), child: const Text('Cancel')),
-                  ]),
-                ),
-              )
-            else ...[
-              const SectionLabel('Play online', icon: Icons.public),
-              if (_error != null) Padding(padding: const EdgeInsets.only(bottom: 8), child: Text(_error!)),
-              GridView.count(
-                crossAxisCount: 3,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                mainAxisSpacing: 10,
-                crossAxisSpacing: 10,
-                childAspectRatio: 1.3,
-                children: [
-                  for (final tc in tcs)
-                    Material(
-                      color: t.colorScheme.surfaceContainerHigh,
-                      borderRadius: BorderRadius.circular(14),
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(14),
-                        onTap: () => _seek(tc['id'] as String),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(_categoryIcon(tc['category'] as String), color: t.colorScheme.primary),
-                            const SizedBox(height: 4),
-                            Text(tc['id'] as String, style: t.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-                            Text(tc['category'] as String, style: t.textTheme.bodySmall),
-                          ],
-                        ),
-                      ),
-                    ),
-                ],
+            const SectionLabel('Time controls'),
+            if (_error != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: HcSpace.s2),
+                child: HcBanner(icon: Icons.error_outline_rounded, text: _error!, tone: HcBannerTone.error),
               ),
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 4,
+                mainAxisExtent: HcSize.tcTile,
+                crossAxisSpacing: HcSpace.s2,
+                mainAxisSpacing: HcSpace.s2,
+              ),
+              itemCount: tcs.length,
+              itemBuilder: (context, i) {
+                final tc = tcs[i];
+                final id = tc['id'] as String;
+                return TimeControlTile(
+                  id: id,
+                  category: tc['category'] as String,
+                  searching: _seeking == id,
+                  dimmed: _seeking != null && _seeking != id,
+                  onTap: _seeking == null ? () => _seek(id) : null,
+                );
+              },
+            ),
+            if (_seeking != null) ...[
+              const SizedBox(height: HcSpace.s2),
+              Center(child: TextButton(onPressed: _cancel, child: const Text('Cancel'))),
             ],
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: _seeking == null ? _challengeFriend : null,
-              icon: const Icon(Icons.person_add_alt_1),
-              label: const Text('Challenge a friend (WhatsApp link)'),
-            ),
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SpectateScreen())),
-              icon: const Icon(Icons.visibility_outlined),
-              label: const Text('Watch live games'),
-            ),
-            const SizedBox(height: 28),
-            const SectionLabel('Naija bots', icon: Icons.smart_toy_outlined),
+            const SizedBox(height: HcSpace.s4),
+            Row(children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _seeking == null ? _challengeFriend : null,
+                  icon: const Icon(Icons.person_add_rounded, size: 20),
+                  label: const Text('Play a friend'),
+                ),
+              ),
+              const SizedBox(width: HcSpace.s3),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SpectateScreen())),
+                  icon: const Icon(Icons.visibility_rounded, size: 20),
+                  label: const Text('Watch live'),
+                ),
+              ),
+            ]),
+            const SizedBox(height: HcSpace.s7),
+            const SectionLabel('Naija bots'),
             Text(
-              'Play offline, no data needed. Bot games don\'t change your rating.',
-              style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
+              "Play offline, no data needed. Bot games don't change your rating.",
+              style: HcText.bodySm.copyWith(color: hc.ink2),
             ),
             if (_lowMemory)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
-                child: Text('The strongest bots are hidden on this phone to keep it smooth.', style: t.textTheme.bodySmall),
+                child: Text('The strongest bots are hidden on this phone to keep it smooth.', style: HcText.bodySm.copyWith(color: hc.ink2)),
               ),
-            const SizedBox(height: 8),
-            for (final b in widget.config.bots)
-              // The 2400+ bots search deepest; skip them on phones under 3 GB for now (spec §3).
-              if (!(_lowMemory && (b['rating'] as num) >= 2400))
-                Card(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  child: ListTile(
-                    onTap: b['tier'] == 'plus' && _tier == 'free'
-                        ? () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                              content: Text('This bot is part of Hamduk Plus. Upgrade at play.chess.hamduk.com.ng/billing.')))
-                        : () => _playBot(b),
-                    // Low data mode skips the portraits (about 30 KB each).
-                    leading: AppSettings.instance.lowData
-                        ? CircleAvatar(child: Text((b['name'] as String).substring(0, 1)))
-                        : CircleAvatar(backgroundImage: NetworkImage(b['portraitUrl'] as String)),
-                    title: Text(b['name'] as String, style: const TextStyle(fontWeight: FontWeight.bold)),
-                    subtitle: Text('${b['hometown']} · ${b['catchphrase']}'),
-                    trailing: b['tier'] == 'plus' && _tier == 'free'
-                        ? const Icon(Icons.lock_outline)
-                        : StatBadge(label: 'rating', value: '${b['rating']}'),
-                  ),
-                ),
           ]),
         ),
+        const SizedBox(height: HcSpace.s3),
+        SizedBox(
+          height: 290,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: HcSpace.s4),
+            children: [
+              for (final b in widget.config.bots)
+                // The 2400+ bots search deepest; skip them on phones under 3 GB for now (spec §3).
+                if (!(_lowMemory && (b['rating'] as num) >= 2400))
+                  Padding(
+                    padding: const EdgeInsets.only(right: HcSpace.s3),
+                    child: PersonaCard(
+                      name: b['name'] as String,
+                      hometown: b['hometown'] as String,
+                      rating: (b['rating'] as num).toInt(),
+                      catchphrase: b['catchphrase'] as String,
+                      portraitUrl: b['portraitUrl'] as String?,
+                      locked: b['tier'] == 'plus' && _tier == 'free',
+                      lowData: AppSettings.instance.lowData,
+                      onTap: b['tier'] == 'plus' && _tier == 'free' ? () => showSubscriptionSheet(context, _tier) : () => _playBot(b),
+                    ),
+                  ),
+            ],
+          ),
+        ),
+        const SizedBox(height: HcSpace.s4),
       ],
     );
   }

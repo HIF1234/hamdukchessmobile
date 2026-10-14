@@ -34,8 +34,16 @@ void main() {
   });
 
   group('sign-in screen', () {
-    Future<void> open(WidgetTester t) =>
-        t.pumpWidget(MaterialApp(home: SignInScreen(config: _noGoogleConfig)));
+    // The sign-in panel (wordmark, form, passkey/Google/guest options, mode links) is taller
+    // than the default test surface; later links like "Forgot password?" need to actually be
+    // on screen for tap() to land on them rather than silently missing.
+    Future<void> open(WidgetTester t) async {
+      t.view.physicalSize = const Size(800, 1600);
+      t.view.devicePixelRatio = 1.0;
+      addTearDown(t.view.resetPhysicalSize);
+      addTearDown(t.view.resetDevicePixelRatio);
+      await t.pumpWidget(MaterialApp(home: SignInScreen(config: _noGoogleConfig)));
+    }
 
     testWidgets('checks the email and password before contacting the server', (t) async {
       await open(t);
@@ -72,6 +80,30 @@ void main() {
       await t.tap(find.text('Back to sign in'));
       await t.pump();
       expect(find.widgetWithText(TextField, 'Password'), findsOneWidget);
+    });
+
+    testWidgets('offers continuing as a guest, except on the forgot-password screen', (t) async {
+      await open(t);
+      expect(find.text('Continue as guest'), findsOneWidget);
+
+      await t.tap(find.text('Forgot password?'));
+      await t.pump();
+      expect(find.text('Continue as guest'), findsNothing);
+    });
+
+    testWidgets('offers passkey sign-in only on the sign-in screen, not sign-up or reset', (t) async {
+      await open(t);
+      expect(find.text('Sign in with a passkey'), findsOneWidget);
+
+      await t.tap(find.text('New here? Create a free account'));
+      await t.pump();
+      expect(find.text('Sign in with a passkey'), findsNothing);
+
+      await t.tap(find.text('Back to sign in'));
+      await t.pump();
+      await t.tap(find.text('Forgot password?'));
+      await t.pump();
+      expect(find.text('Sign in with a passkey'), findsNothing);
     });
 
     testWidgets('Google sign-in is hidden until the server configures a web client id', (t) async {

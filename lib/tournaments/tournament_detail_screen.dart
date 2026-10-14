@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/api.dart';
+import '../core/hc_widgets.dart';
+import '../core/theme.dart';
 import '../games/game_screen.dart';
 
 /// One tournament: standings, this round's pairings, join/withdraw (GET/POST /tournaments/$id).
@@ -94,6 +96,7 @@ class _Body extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final hc = context.hc;
     final t = data['tournament'] as Map<String, dynamic>;
     final standings = (data['standings'] as List).cast<Map<String, dynamic>>();
     final games = (data['games'] as List).cast<Map<String, dynamic>>();
@@ -191,54 +194,44 @@ class _Body extends StatelessWidget {
         if (roundGames.isEmpty)
           Text('Pairings appear when the round starts.', style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant))
         else
-          ...roundGames.map((g) {
-            final result = g['result'] as String?;
-            final resultText = result == null
-                ? 'in progress'
-                : result == 'draw'
-                    ? '½–½'
-                    : result == 'white'
-                        ? '1–0'
-                        : '0–1';
-            return Card(
-              margin: const EdgeInsets.only(bottom: 8),
-              child: ListTile(
-                title: Text('${name(g['white_id'] as String?)} vs ${name(g['black_id'] as String?)}'),
-                trailing: Text(resultText, style: theme.textTheme.bodySmall),
+          HcListGroup(children: [
+            for (final g in roundGames)
+              HcListRow(
+                title: '${name(g['white_id'] as String?)} vs ${name(g['black_id'] as String?)}',
+                trailing: Text(
+                  switch (g['result']) {
+                    null => 'in progress',
+                    'draw' => '½–½',
+                    'white' => '1–0',
+                    _ => '0–1',
+                  },
+                  style: theme.textTheme.bodySmall,
+                ),
                 onTap: g['game_id'] == null || myId == null
                     ? null
                     : () => Navigator.of(context)
                         .push(MaterialPageRoute(builder: (_) => GameScreen(gameId: g['game_id'] as String, myId: myId))),
               ),
-            );
-          }),
+          ]),
 
-        const SizedBox(height: 24),
+        const SizedBox(height: HcSpace.s6),
         Text('Standings (${standings.length}/${t['max_players']})', style: theme.textTheme.titleMedium),
-        const SizedBox(height: 8),
+        const SizedBox(height: HcSpace.s2),
         if (standings.isEmpty)
           Text('No entrants yet.', style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant))
         else
-          Card(
-            child: Column(
-              children: [
-                for (var i = 0; i < standings.length; i++)
-                  ListTile(
-                    dense: true,
-                    leading: SizedBox(width: 24, child: Text('${i + 1}', textAlign: TextAlign.center)),
-                    title: Text(
-                      name(standings[i]['user_id'] as String?),
-                      style: standings[i]['status'] != 'active'
-                          ? const TextStyle(decoration: TextDecoration.lineThrough)
-                          : standings[i]['user_id'] == myId
-                              ? const TextStyle(fontWeight: FontWeight.bold)
-                              : null,
-                    ),
-                    trailing: Text('${standings[i]['score']}', style: theme.textTheme.titleSmall),
-                  ),
-              ],
-            ),
-          ),
+          HcListGroup(children: [
+            for (var i = 0; i < standings.length; i++)
+              DecoratedBox(
+                decoration: BoxDecoration(color: standings[i]['user_id'] == myId ? hc.greenSoft : null),
+                child: HcListRow(
+                  leading: SizedBox(width: 24, child: Text('${i + 1}', textAlign: TextAlign.center, style: HcText.ratingMd.copyWith(color: hc.ink3))),
+                  title: name(standings[i]['user_id'] as String?),
+                  subtitle: standings[i]['status'] != 'active' ? 'Withdrawn' : null,
+                  trailing: Text('${standings[i]['score']}', style: HcText.ratingMd.copyWith(color: hc.ink)),
+                ),
+              ),
+          ]),
       ],
     );
   }

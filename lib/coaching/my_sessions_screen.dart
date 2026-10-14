@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../core/api.dart';
+import '../core/hc_widgets.dart';
+import '../core/theme.dart';
+import '../core/ui.dart';
 
 String _formatWhen(String iso) {
   final dt = DateTime.parse(iso).toLocal();
@@ -54,7 +57,7 @@ class _MySessionsScreenState extends State<MySessionsScreen> {
                 children: List.generate(
                   5,
                   (i) => IconButton(
-                    icon: Icon(i < rating ? Icons.star : Icons.star_border, color: Colors.amber),
+                    icon: Icon(i < rating ? Icons.star_rounded : Icons.star_border_rounded, color: context.hc.gold),
                     onPressed: () => setDialogState(() => rating = i + 1),
                   ),
                 ),
@@ -100,24 +103,23 @@ class _MySessionsScreenState extends State<MySessionsScreen> {
               : RefreshIndicator(
                   onRefresh: _load,
                   child: ListView(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(HcSpace.s4),
                     children: [
-                      Text('As student', style: Theme.of(context).textTheme.titleMedium),
-                      const SizedBox(height: 8),
+                      const SectionLabel('As student'),
                       if (asStudent.isEmpty)
-                        const Padding(padding: EdgeInsets.only(bottom: 16), child: Text('No sessions booked yet.'))
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: HcSpace.s4),
+                          child: Text('No sessions booked yet.', style: HcText.bodySm.copyWith(color: context.hc.ink2)),
+                        )
                       else
-                        for (final s in asStudent)
-                          _SessionCard(
-                            session: s,
-                            reviewed: reviewed.contains(s['id']),
-                            onReview: () => _review(s['id'] as String),
-                          ),
+                        HcListGroup(children: [
+                          for (final s in asStudent)
+                            _SessionRow(session: s, reviewed: reviewed.contains(s['id']), onReview: () => _review(s['id'] as String)),
+                        ]),
                       if (asCoach.isNotEmpty) ...[
-                        const SizedBox(height: 16),
-                        Text('As coach', style: Theme.of(context).textTheme.titleMedium),
-                        const SizedBox(height: 8),
-                        for (final s in asCoach) _SessionCard(session: s),
+                        const SizedBox(height: HcSpace.s4),
+                        const SectionLabel('As coach'),
+                        HcListGroup(children: [for (final s in asCoach) _SessionRow(session: s)]),
                       ],
                     ],
                   ),
@@ -126,42 +128,39 @@ class _MySessionsScreenState extends State<MySessionsScreen> {
   }
 }
 
-class _SessionCard extends StatelessWidget {
-  const _SessionCard({required this.session, this.reviewed = false, this.onReview});
+class _SessionRow extends StatelessWidget {
+  const _SessionRow({required this.session, this.reviewed = false, this.onReview});
   final Map<String, dynamic> session;
   final bool reviewed;
   final VoidCallback? onReview;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final hc = context.hc;
     final status = session['status'] as String;
-    final color = switch (status) {
-      'confirmed' => theme.colorScheme.primary,
-      'completed' => theme.colorScheme.onSurfaceVariant,
-      'cancelled' => theme.colorScheme.error,
-      _ => theme.colorScheme.secondary,
+    final (Color bg, Color fg) = switch (status) {
+      'confirmed' => (hc.greenSoft, hc.green),
+      'completed' => (hc.surface2, hc.ink2),
+      'cancelled' => (hc.dangerSoft, hc.dangerInk),
+      _ => (hc.goldSoft, hc.goldInk),
     };
-    return Card(
-      margin: const EdgeInsets.only(bottom: 10),
-      child: ListTile(
-        title: Text(_formatWhen(session['scheduled_at'] as String)),
-        subtitle: Text('${session['duration_min']} min · ₦${((session['amount_kobo'] as int) / 100).round()}'),
-        trailing: Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(color: color.withValues(alpha: 0.16), borderRadius: BorderRadius.circular(8)),
-              child: Text(status.toUpperCase(), style: theme.textTheme.labelSmall?.copyWith(color: color, fontWeight: FontWeight.w700)),
-            ),
-            if (status == 'completed' && onReview != null && !reviewed)
-              TextButton(onPressed: onReview, child: const Text('Rate')),
-            if (reviewed) Text('Rated', style: theme.textTheme.labelSmall),
-          ],
-        ),
+    return HcListRow(
+      title: _formatWhen(session['scheduled_at'] as String),
+      subtitle: '${session['duration_min']} min · ${hcNaira(session['amount_kobo'] as int)}',
+      trailing: Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: HcSpace.s2, vertical: 2),
+            decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(HcRadius.xs)),
+            child: Text(status.toUpperCase(), style: HcText.label.copyWith(fontSize: 11, color: fg)),
+          ),
+          if (status == 'completed' && onReview != null && !reviewed)
+            TextButton(onPressed: onReview, child: const Text('Rate')),
+          if (reviewed) Text('Rated', style: HcText.label.copyWith(fontSize: 11, color: hc.ink3)),
+        ],
       ),
     );
   }

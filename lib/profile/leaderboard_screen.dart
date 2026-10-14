@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/api.dart';
-import '../core/ui.dart';
+import '../core/hc_widgets.dart';
+import '../core/theme.dart';
 import 'public_profile_screen.dart';
 
 const _categories = <(String, String)>[
@@ -46,14 +47,13 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context);
     final myId = Supabase.instance.client.auth.currentUser?.id;
     final rows = _rows;
     return Scaffold(
       appBar: AppBar(title: const Text('Leaderboard')),
       body: Column(children: [
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: HcSpace.s3, vertical: HcSpace.s2),
           child: SizedBox(
             height: 36,
             child: ListView(
@@ -61,7 +61,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
               children: [
                 for (final (key, label) in _categories)
                   Padding(
-                    padding: const EdgeInsets.only(right: 6),
+                    padding: const EdgeInsets.only(right: HcSpace.s2),
                     child: ChoiceChip(
                       label: Text(label),
                       selected: _category == key,
@@ -82,29 +82,49 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                 ? const Center(child: CircularProgressIndicator())
                 : _error != null
                     ? Center(child: Text(_error!))
-                    : ListView.builder(
-                        itemCount: rows!.length,
-                        itemBuilder: (context, i) {
-                          final r = rows[i];
-                          final mine = r['user_id'] == myId;
-                          return ListTile(
-                            tileColor: mine ? t.colorScheme.primaryContainer.withValues(alpha: 0.4) : null,
-                            leading: SizedBox(
-                              width: 32,
-                              child: Text('${r['rank']}', style: t.textTheme.titleMedium, textAlign: TextAlign.center),
-                            ),
-                            title: Text(r['username'] as String, style: const TextStyle(fontWeight: FontWeight.bold)),
-                            subtitle: Text('${r['country'] ?? ''} · ${r['games']} games'.trim()),
-                            trailing: StatBadge(label: 'rating', value: '${r['rating']}'),
-                            onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                              builder: (_) => PublicProfileScreen(username: r['username'] as String),
-                            )),
-                          );
-                        },
+                    : ListView(
+                        padding: const EdgeInsets.all(HcSpace.s4),
+                        children: [
+                          HcListGroup(children: [
+                            for (final r in rows!)
+                              _LeaderboardRow(row: r, mine: r['user_id'] == myId),
+                          ]),
+                        ],
                       ),
           ),
         ),
       ]),
+    );
+  }
+}
+
+class _LeaderboardRow extends StatelessWidget {
+  const _LeaderboardRow({required this.row, required this.mine});
+  final Map<String, dynamic> row;
+  final bool mine;
+
+  @override
+  Widget build(BuildContext context) {
+    final hc = context.hc;
+    final rank = row['rank'] as int;
+    return DecoratedBox(
+      decoration: BoxDecoration(color: mine ? hc.greenSoft : null),
+      child: HcListRow(
+        leading: SizedBox(
+          width: 32,
+          child: Text(
+            '$rank',
+            textAlign: TextAlign.center,
+            style: HcText.ratingMd.copyWith(color: rank <= 3 ? hc.goldInk : hc.ink3),
+          ),
+        ),
+        title: row['username'] as String,
+        subtitle: '${row['country'] ?? ''} · ${row['games']} games'.trim(),
+        trailing: Text(hcNumber((row['rating'] as num).toInt()), style: HcText.ratingMd.copyWith(color: hc.ink)),
+        onTap: () => Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => PublicProfileScreen(username: row['username'] as String),
+        )),
+      ),
     );
   }
 }
