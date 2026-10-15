@@ -5,6 +5,7 @@ import 'package:flutter/widgets.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/api.dart';
+import '../core/game_feedback.dart';
 import '../core/telemetry.dart';
 import 'game_state.dart';
 
@@ -58,6 +59,7 @@ class GameController extends ChangeNotifier with WidgetsBindingObserver {
   Timer? _ping;
   DateTime? _disconnectedAt;
   bool _flagSent = false;
+  int _lowTimeTickPly = -1;
   bool _readySent = false;
   int _firstMoveCheckTicks = 0;
   bool _disposed = false;
@@ -118,6 +120,7 @@ class GameController extends ChangeNotifier with WidgetsBindingObserver {
       final fresh = GameState.fromApi(j);
       // A pending move that the server now shows as played is confirmed.
       if (pending != null && fresh.ply >= pending!.ply) pending = null;
+      if (game == null && fresh.active) GameFeedback.on(GameEvent.gameStart);
       game = fresh;
       error = null;
       _notify();
@@ -142,7 +145,9 @@ class GameController extends ChangeNotifier with WidgetsBindingObserver {
             final g = game;
             if (g == null) return;
             final next = g.mergeRow(p.newRecord);
-            if (pending != null && next.ply >= pending!.ply) pending = null;
+            final wasMine = pending != null && next.ply >= pending!.ply;
+            if (wasMine) pending = null;
+            if (next.ply > g.ply) _playMoveFeedback(next, mine: wasMine);
             game = next;
             _notify();
             _maybePlayPremove();
@@ -180,6 +185,18 @@ class GameController extends ChangeNotifier with WidgetsBindingObserver {
     Api.instance.post('/games/$gameId/ready').catchError((_) {
       _readySent = false;
     });
+  }
+
+  /// Sound + vibration for the move that just landed: whoever made it, and whether it was a
+  /// capture, check, castle or checkmate (read off the SAN -- "x" for capture, "+"/"#" for
+  /// check/mate, "O-O"/"O-O-O" for castling).
+  void _playMoveFeedback(GameState next, {required bool mine}) {
+    if (!next.active) {
+      GameFeedback.on(GameEvent.gameEnd);
+      return;
+    }
+    final san = next.sanMoves.isEmpty ? '' : next.sanMoves.last;
+    GameFeedback.on(eventForSan(san, mine: mine));
   }
 
   void _onGameEvent(Map<String, dynamic> e) {
@@ -311,6 +328,13 @@ class GameController extends ChangeNotifier with WidgetsBindingObserver {
     // The opponent's clock hit zero: ask the server to end it (it decides).
     final (w, b) = displayClocks(g, now: DateTime.now(), serverOffset: serverOffset);
     final oppMs = isWhite ? b : w;
+    // A low-time tick once per move for my own clock under 10s -- reset by _lowTimeTickPly
+    // tracking the ply it last played at, so it plays again on each new move under 10s.
+    final myMs = isWhite ? w : b;
+    if (isParticipant && myMs > 0 && myMs < 10000 && _lowTimeTickPly != g.ply) {
+      _lowTimeTickPly = g.ply;
+      GameFeedback.on(GameEvent.lowTimeTick);
+    }
     if (isParticipant && !_flagSent && oppMs <= 0 && g.ply >= 2 && !myTurn) {
       _flagSent = true;
       Api.instance.post('/games/$gameId/flag').then((_) => reload()).catchError((_) {

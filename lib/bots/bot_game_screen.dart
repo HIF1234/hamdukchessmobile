@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../auth/guest_conversion.dart';
 import '../board/chess_board.dart';
+import '../core/game_feedback.dart';
 import '../core/hc_widgets.dart';
 import '../core/notification_prompt.dart';
 import '../core/settings.dart';
@@ -94,6 +95,8 @@ class _BotGameScreenState extends State<BotGameScreen> {
   bool _onMove(String from, String to, String? promo) {
     if (_thinking || _result != null) return false;
     if (!_game.move({'from': from, 'to': to, 'promotion': promo ?? 'q'})) return false;
+    final san = _game.getHistory().cast<String>().last;
+    GameFeedback.on(eventForSan(san, mine: true));
     setState(() {
       _last = (from, to);
       _hintMove = null;
@@ -115,6 +118,8 @@ class _BotGameScreenState extends State<BotGameScreen> {
     if (spent < const Duration(milliseconds: 400)) await Future.delayed(const Duration(milliseconds: 400) - spent);
     if (!mounted) return;
     _game.move({'from': uci.substring(0, 2), 'to': uci.substring(2, 4), 'promotion': uci.length > 4 ? uci[4] : null});
+    final san = _game.getHistory().cast<String>().last;
+    GameFeedback.on(eventForSan(san, mine: false));
     setState(() {
       _last = (uci.substring(0, 2), uci.substring(2, 4));
       _ply++;
@@ -177,6 +182,7 @@ class _BotGameScreenState extends State<BotGameScreen> {
   }
 
   void _finish(String result, String reason) {
+    GameFeedback.on(GameEvent.gameEnd);
     setState(() {
       _result = result;
       _reason = reason;
