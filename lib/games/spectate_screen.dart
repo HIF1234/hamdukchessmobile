@@ -5,6 +5,7 @@ import '../core/api.dart';
 import '../core/hc_widgets.dart';
 import '../core/theme.dart';
 import 'game_screen.dart';
+import 'tv_screen.dart';
 
 /// Public games open to watch live (GET /spectate).
 class SpectateScreen extends StatefulWidget {
@@ -37,7 +38,16 @@ class _SpectateScreenState extends State<SpectateScreen> {
   Widget build(BuildContext context) {
     final games = _games;
     return Scaffold(
-      appBar: AppBar(title: const Text('Watch live')),
+      appBar: AppBar(
+        title: const Text('Watch live'),
+        actions: [
+          IconButton(
+            tooltip: 'TV: the top game being played',
+            icon: const Icon(Icons.live_tv_rounded),
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TvScreen())),
+          ),
+        ],
+      ),
       body: RefreshIndicator(
         onRefresh: _load,
         child: games == null && _error == null

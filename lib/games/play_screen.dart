@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../core/active_game.dart';
 import '../core/api.dart';
@@ -537,6 +538,8 @@ class _PlayScreenState extends State<PlayScreen> {
   String get _myId => Supabase.instance.client.auth.currentUser!.id;
 
   Future<void> _seek(String tc) async {
+    if (_rated) await _maybeShowFairPlayNote();
+    if (!mounted) return;
     setState(() {
       _seeking = tc;
       _since = DateTime.now();
@@ -593,6 +596,33 @@ class _PlayScreenState extends State<PlayScreen> {
 
   /// "Nobody free at your level yet. Play Agbero while you wait?" -- the search carries on
   /// in the background and still opens the real game the moment one is found.
+  /// One line on fair play before a rated game, shown once per install.
+  Future<void> _maybeShowFairPlayNote() async {
+    final store = await JsonStore.open();
+    if (await store.read('fair_play_note_seen') == true) return;
+    await store.write('fair_play_note_seen', true);
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Play fair'),
+        content: const Text(
+          'Rated games are watched for engine use and other unfair play. Keep it a real game between you and your opponent.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => launchUrl(
+              Uri.parse('https://play.chess.hamduk.com.ng/fair-play'),
+              mode: LaunchMode.externalApplication,
+            ),
+            child: const Text('Read the rules'),
+          ),
+          FilledButton(onPressed: () => Navigator.pop(ctx), child: const Text('Got it')),
+        ],
+      ),
+    );
+  }
+
   Future<void> _offerBotWhileWaiting() async {
     final matches = widget.config.bots.where((b) => b['id'] == 'agbero');
     if (matches.isEmpty || !mounted) return;
