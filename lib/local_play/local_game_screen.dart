@@ -49,6 +49,7 @@ class _LocalGameScreenState extends State<LocalGameScreen> {
   late final ch.Chess _game = ch.Chess.fromFEN(widget.fen, check_validity: false);
   StreamSubscription<LocalMessage>? _sub;
   (String, String)? _last;
+  String? _lastSan;
   String? _over;
   bool _myConnectionLost = false;
   bool _opponentAway = false; // their socket dropped, but the host kept the game -- might resume
@@ -84,8 +85,9 @@ class _LocalGameScreenState extends State<LocalGameScreen> {
         setState(() {
           _game.move({'from': uci.substring(0, 2), 'to': uci.substring(2, 4), 'promotion': uci.length > 4 ? uci[4] : null});
           _last = (uci.substring(0, 2), uci.substring(2, 4));
+          _lastSan = _game.getHistory().cast<String>().last;
         });
-        GameFeedback.on(eventForSan(_game.getHistory().cast<String>().last, mine: false));
+        GameFeedback.on(eventForSan(_lastSan!, mine: false));
         _checkEnd();
       case 'opponent_left':
         if (mounted && _over == null) setState(() => _opponentAway = true);
@@ -110,8 +112,12 @@ class _LocalGameScreenState extends State<LocalGameScreen> {
     final whiteToMove = _game.turn == ch.Color.WHITE;
     if (whiteToMove != widget.playWhite) return false; // not this player's turn
     if (!_game.move({'from': from, 'to': to, 'promotion': promo ?? 'q'})) return false;
-    GameFeedback.on(eventForSan(_game.getHistory().cast<String>().last, mine: true));
-    setState(() => _last = (from, to));
+    final san = _game.getHistory().cast<String>().last;
+    GameFeedback.on(eventForSan(san, mine: true));
+    setState(() {
+      _last = (from, to);
+      _lastSan = san;
+    });
     widget.sendMove('$from$to${promo ?? ''}');
     _checkEnd();
     return true;
@@ -182,6 +188,7 @@ class _LocalGameScreenState extends State<LocalGameScreen> {
               whiteAtBottom: widget.playWhite,
               playerColor: widget.playWhite ? 'w' : 'b',
               lastMove: _last,
+              lastMoveSan: _lastSan,
               onMove: _over == null && !_opponentAway && !_myConnectionLost ? _onMove : null,
               animate: !AppSettings.instance.lowData,
             ),

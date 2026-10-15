@@ -103,6 +103,7 @@ class _DailyPuzzleScreenState extends State<DailyPuzzleScreen> {
                       fen: s.fen,
                       whiteAtBottom: s.whiteToSolve,
                       lastMove: s.lastMove,
+                      lastMoveSan: s.lastSan,
                       hintSquare: s.hintFrom,
                       arrow: s.hintTo != null ? (s.hintFrom!, s.hintTo!) : null,
                       onMove: s.status == PuzzleStatus.playing && !s.awaitingReply ? _onMove : null,

@@ -116,6 +116,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
           fen: m?.fenAfter ?? widget.startFen,
           whiteAtBottom: widget.whiteAtBottom,
           lastMove: m == null ? null : (m.uci.substring(0, 2), m.uci.substring(2, 4)),
+          lastMoveSan: m?.san,
           animate: !AppSettings.instance.lowData,
         ),
         const SizedBox(height: 8),

@@ -43,6 +43,7 @@ class _BotGameScreenState extends State<BotGameScreen> {
   bool _thinking = false;
   bool _hintLoading = false;
   (String, String)? _last;
+  String? _lastSan;
   (String, String)? _hintMove;
   bool _flipped = false;
   String? _result; // win | loss | draw, once the game ends
@@ -102,6 +103,7 @@ class _BotGameScreenState extends State<BotGameScreen> {
     GameFeedback.on(eventForSan(san, mine: true));
     setState(() {
       _last = (from, to);
+      _lastSan = san;
       _hintMove = null;
       _ply++;
     });
@@ -125,6 +127,7 @@ class _BotGameScreenState extends State<BotGameScreen> {
     GameFeedback.on(eventForSan(san, mine: false));
     setState(() {
       _last = (uci.substring(0, 2), uci.substring(2, 4));
+      _lastSan = san;
       _ply++;
       _thinking = false;
     });
@@ -154,6 +157,8 @@ class _BotGameScreenState extends State<BotGameScreen> {
       _hintMove = null;
       final hist = _game.getHistory({'verbose': true});
       _last = hist.isEmpty ? null : ((hist.last as Map)['from'] as String, (hist.last as Map)['to'] as String);
+      final sanHist = _game.getHistory().cast<String>();
+      _lastSan = sanHist.isEmpty ? null : sanHist.last;
     });
     _rememberProgress();
   }
@@ -222,6 +227,7 @@ class _BotGameScreenState extends State<BotGameScreen> {
     setState(() {
       _game = ch.Chess();
       _last = null;
+      _lastSan = null;
       _hintMove = null;
       _result = null;
       _reason = null;
@@ -335,6 +341,7 @@ class _BotGameScreenState extends State<BotGameScreen> {
                     whiteAtBottom: widget.playWhite != _flipped,
                     playerColor: widget.playWhite ? 'w' : 'b',
                     lastMove: _last,
+                    lastMoveSan: _lastSan,
                     arrow: _hintMove,
                     onMove: _result == null && !_thinking ? _onMove : null,
                     animate: !AppSettings.instance.lowData,

@@ -30,6 +30,7 @@ class PuzzleSession {
   int _step = 0;
   PuzzleStatus status = PuzzleStatus.playing;
   (String, String)? lastMove;
+  String? lastSan;
 
   // 0 = no hint shown for the current move, 1 = source square, 2 = full move as an arrow.
   // Resets to 0 on each move; maxHintLevel (0-2) is the highest reached in the whole
@@ -62,6 +63,7 @@ class PuzzleSession {
     final legal = _game.move({'from': from, 'to': to, 'promotion': promotion ?? expPromo ?? 'q'});
     if (!legal) return false;
     lastMove = (from, to);
+    lastSan = _game.getHistory().cast<String>().last;
     final correct = expected.substring(0, 2) == from &&
         expected.substring(2, 4) == to &&
         (expPromo == null || promotion == null || promotion == expPromo);
@@ -83,6 +85,7 @@ class PuzzleSession {
     final m = puzzle.solution[_step];
     _game.move({'from': m.substring(0, 2), 'to': m.substring(2, 4), 'promotion': m.length > 4 ? m[4] : null});
     lastMove = (m.substring(0, 2), m.substring(2, 4));
+    lastSan = _game.getHistory().cast<String>().last;
     _step++;
     _hintLevel = 0;
     if (_step >= puzzle.solution.length) status = PuzzleStatus.solved;
