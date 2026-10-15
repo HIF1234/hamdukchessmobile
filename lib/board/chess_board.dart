@@ -10,7 +10,7 @@ const _slide = Duration(milliseconds: 120);
 /// Called when the player tries a move. Return true if it was accepted.
 typedef MoveHandler = bool Function(String from, String to, String? promotion);
 
-/// Called when the player queues a move during the opponent's turn.
+/// Called when the player adds a move to the premove queue during the opponent's turn.
 typedef PremoveHandler = void Function(String from, String to, String? promotion);
 
 /// A fast, dependency-light board: squares in one paint pass, pieces as cached SVGs placed
@@ -27,7 +27,7 @@ class ChessBoardView extends StatefulWidget {
     this.playerColor,
     this.onPremove,
     this.onCancelPremove,
-    this.premove,
+    this.premoveQueue = const [],
     this.animate = true,
     this.arrow,
   });
@@ -43,10 +43,12 @@ class ChessBoardView extends StatefulWidget {
   /// 'w' or 'b': the side this player controls. Null means whoever is to move (puzzles).
   final String? playerColor;
 
-  /// When set, the player can queue a move while it's the opponent's turn.
+  /// When set, the player can queue moves while it's the opponent's turn.
   final PremoveHandler? onPremove;
+  /// Tapping the board with nothing selected clears the whole queue.
   final VoidCallback? onCancelPremove;
-  final (String, String)? premove;
+  /// Every move currently queued, played in order as each of this player's turns come up.
+  final List<(String, String)> premoveQueue;
 
   /// Slide the last move's piece. Off in low-data mode.
   final bool animate;
@@ -121,12 +123,15 @@ class _ChessBoardViewState extends State<ChessBoardView> with SingleTickerProvid
     return Offset(col * sq, row * sq);
   }
 
-  /// A piece the player may pick up now: to move on their turn, or to premove otherwise.
+  /// A piece the player may pick up now: to move on their turn, or to queue another premove
+  /// otherwise. A square that's already the start of a queued premove can't start another --
+  /// the real board hasn't moved yet, so the picker would otherwise show the same piece twice.
   bool _canPick(String square) {
     final piece = _pieces[square];
     if (piece == null) return false;
     if (_myTurn) return widget.onMove != null && piece[0] == _toMove;
-    return widget.onPremove != null && piece[0] == widget.playerColor;
+    if (widget.onPremove == null || piece[0] != widget.playerColor) return false;
+    return !widget.premoveQueue.any((p) => p.$1 == square);
   }
 
   void _select(String square) {
@@ -213,7 +218,7 @@ class _ChessBoardViewState extends State<ChessBoardView> with SingleTickerProvid
     } else if (_canPick(sq) && sq != _selectedSq) {
       _select(sq);
     } else {
-      if (widget.premove != null && _selectedSq == null) widget.onCancelPremove?.call();
+      if (widget.premoveQueue.isNotEmpty && _selectedSq == null) widget.onCancelPremove?.call();
       setState(_clearSelection);
     }
   }
@@ -265,8 +270,8 @@ class _ChessBoardViewState extends State<ChessBoardView> with SingleTickerProvid
                   if (widget.lastMove != null) widget.lastMove!.$1: board.lastMove,
                   if (widget.lastMove != null) widget.lastMove!.$2: board.lastMove,
                   ?widget.hintSquare: board.selected,
-                  if (widget.premove != null) widget.premove!.$1: board.premove,
-                  if (widget.premove != null) widget.premove!.$2: board.premove,
+                  for (final p in widget.premoveQueue) p.$1: board.premove,
+                  for (final p in widget.premoveQueue) p.$2: board.premove,
                   ?_selectedSq: _selectingPremove ? board.premove : board.selected,
                 },
                 // A premove can go almost anywhere, so dots would only be noise.

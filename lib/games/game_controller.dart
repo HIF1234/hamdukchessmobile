@@ -35,8 +35,10 @@ class GameController extends ChangeNotifier with WidgetsBindingObserver {
   GameState? game;
   PendingMove? pending;
 
-  /// A move queued during the opponent's turn: (from, to, promotion).
-  (String, String, String?)? premove;
+  /// Moves queued during the opponent's turn, played in order on each of this player's
+  /// later turns: (from, to, promotion).
+  final List<(String, String, String?)> premoveQueue = [];
+  static const _maxPremoves = 3;
   String? error;
   String? notice;
   bool rematchOfferedByMe = false;
@@ -250,23 +252,29 @@ class GameController extends ChangeNotifier with WidgetsBindingObserver {
     return true;
   }
 
-  void setPremove(String from, String to, String? promotion) {
-    if (game?.active != true) return;
-    premove = (from, to, promotion);
+  void queuePremove(String from, String to, String? promotion) {
+    if (game?.active != true || premoveQueue.length >= _maxPremoves) return;
+    premoveQueue.add((from, to, promotion));
     _notify();
   }
 
   void cancelPremove() {
-    premove = null;
+    premoveQueue.clear();
     _notify();
   }
 
-  /// Plays the queued premove as soon as it's our turn, if it's still legal then.
+  /// Plays the first queued premove as soon as it's our turn, if it's still legal then;
+  /// an illegal one is dropped and the next in the queue is tried, so one stale premove
+  /// doesn't block the rest.
   void _maybePlayPremove() {
-    final p = premove;
-    if (p == null || !myTurn) return;
-    premove = null;
-    if (!play(p.$1, p.$2, p.$3)) _notify(); // illegal now: dropped
+    if (!myTurn) return;
+    var dropped = false;
+    while (premoveQueue.isNotEmpty) {
+      final p = premoveQueue.removeAt(0);
+      if (play(p.$1, p.$2, p.$3)) return; // sent; play() already notified
+      dropped = true;
+    }
+    if (dropped) _notify();
   }
 
   Future<void> _send() async {

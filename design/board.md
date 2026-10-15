@@ -29,7 +29,7 @@ Paint in this order, bottom to top:
 
 1. Square colour.
 2. `board-last-move` on both squares of the last move.
-3. `board-premove` on both squares of a queued premove.
+3. `board-premove` on both squares of every queued premove.
 4. `board-selected` on the picked-up piece's square and on a hint square.
 5. The `board-check` radial glow under a king in check: solid at the centre, transparent at 70% of the square.
 6. Pieces.
@@ -44,8 +44,8 @@ Inside the board: files along the bottom rank at the bottom-right of each square
 ## Interaction
 
 - Tap a piece, then a square; or drag. Tapping the selected piece again, or an empty square that is not a target, clears the selection.
-- Premoves: while it is the opponent's turn you can pick your own piece and any square; it shows in `board-premove` and plays the moment it becomes legal. Tap anywhere on the board to cancel it.
-- Promotion: a picker over the promotion square with queen, knight, rook and bishop on `surface` with `shadow-2`; queen first. (The app currently promotes to a queen automatically; replace that with the picker.)
+- Premoves: while it is the opponent's turn you can pick your own piece and any square to queue a move, up to 3 queued at once; each shows in `board-premove` and plays in order, one per turn, the moment it becomes legal (an illegal one is dropped and the next in the queue is tried). A square that's already the start of a queued premove can't start another, since the real board hasn't moved yet. Tap anywhere on the board with nothing selected to cancel the whole queue.
+- Promotion: a picker over the promotion square with queen, knight, rook and bishop on `surface` with `shadow-2`; queen first. The Auto-queen setting skips the picker and always promotes to a queen.
 - The last move slides 120ms ease out unless the player dropped the piece by hand. Off in low-data mode and with reduced motion.
 - Haptics: a light tick on a legal drop, a heavier one on capture and check.
 - Sounds, when on: move, capture, check, game end. Off by default on first install.

@@ -308,9 +308,9 @@ class _GameScreenState extends State<GameScreen> {
                   : (c.pending != null ? (c.pending!.from, c.pending!.to) : g.lastMove),
               playerColor: c.isWhite ? 'w' : 'b',
               onMove: !lookingBack && g.active ? c.play : null,
-              onPremove: !lookingBack && g.active ? c.setPremove : null,
+              onPremove: !lookingBack && g.active ? c.queuePremove : null,
               onCancelPremove: c.cancelPremove,
-              premove: c.premove == null ? null : (c.premove!.$1, c.premove!.$2),
+              premoveQueue: [for (final p in c.premoveQueue) (p.$1, p.$2)],
               animate: !AppSettings.instance.lowData,
             );
             final myBar = PlayerBar(

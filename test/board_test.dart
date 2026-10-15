@@ -65,7 +65,39 @@ void main() {
     expect(moves, isEmpty);
   });
 
-  testWidgets('tapping an empty square cancels a queued premove', (t) async {
+  testWidgets('a second piece can be queued behind the first, building a queue', (t) async {
+    final premoves = <String>[];
+    await pump(
+      t,
+      ChessBoardView(
+        fen: afterE4,
+        playerColor: 'w',
+        onPremove: (f, to, p) => premoves.add('$f$to'),
+        premoveQueue: const [('g1', 'f3')],
+      ),
+    );
+    await tap(t, 'b1');
+    await tap(t, 'c3');
+    expect(premoves, ['b1c3']);
+  });
+
+  testWidgets("a square that's already the start of a queued premove can't be picked again", (t) async {
+    final premoves = <String>[];
+    await pump(
+      t,
+      ChessBoardView(
+        fen: afterE4,
+        playerColor: 'w',
+        onPremove: (f, to, p) => premoves.add('$f$to'),
+        premoveQueue: const [('g1', 'f3')],
+      ),
+    );
+    await tap(t, 'g1');
+    await tap(t, 'h3');
+    expect(premoves, isEmpty);
+  });
+
+  testWidgets('tapping an empty square cancels the whole queue', (t) async {
     var cancelled = false;
     await pump(
       t,
@@ -75,7 +107,7 @@ void main() {
         onMove: (f, to, p) => false,
         onPremove: (f, to, p) {},
         onCancelPremove: () => cancelled = true,
-        premove: ('g1', 'f3'),
+        premoveQueue: const [('g1', 'f3'), ('b1', 'c3')],
       ),
     );
     await tap(t, 'd5');
