@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../games/game_screen.dart';
+import '../profile/public_profile_screen.dart';
+import '../social/conversation_screen.dart';
 import 'api.dart';
 import 'hc_widgets.dart';
 import 'links.dart';
@@ -73,11 +75,31 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
     final link = n.link;
     if (link == null || !mounted) return;
-    final gameId = gameIdFrom(Uri.parse('https://play.chess.hamduk.com.ng$link'));
+    final uri = Uri.parse('https://play.chess.hamduk.com.ng$link');
     final me = Supabase.instance.client.auth.currentUser?.id;
+    final gameId = gameIdFrom(uri) ?? _idAfter(uri, 'spectate');
     if (gameId != null && me != null) {
       Navigator.of(context).push(MaterialPageRoute(builder: (_) => GameScreen(gameId: gameId, myId: me)));
+      return;
     }
+    final username = _idAfter(uri, 'profile');
+    if (username != null) {
+      Navigator.of(context).push(MaterialPageRoute(builder: (_) => PublicProfileScreen(username: username)));
+      return;
+    }
+    final withUser = uri.queryParameters['with'];
+    if (uri.path == '/messages' && withUser != null) {
+      Navigator.of(context).push(MaterialPageRoute(builder: (_) => ConversationScreen(username: withUser)));
+    }
+    // Other links (forums, clubs, admin) have no screen in the mobile app yet; the
+    // notification still marked itself read above, so it just doesn't navigate further.
+  }
+
+  static String? _idAfter(Uri uri, String segment) {
+    final parts = uri.pathSegments;
+    final i = parts.indexOf(segment);
+    if (i == -1 || i + 1 >= parts.length) return null;
+    return parts[i + 1];
   }
 
   @override
