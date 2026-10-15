@@ -212,37 +212,13 @@ class _PlayScreenState extends State<PlayScreen> {
     }
   }
 
-  /// "Tunde challenges you to 5 min": a push notification, not a shared link -- the friend
-  /// gets Accept/Decline (ChallengeAcceptScreen) and it expires in 10 minutes.
-  Future<void> _challengeOnlineFriend(Map<String, dynamic> friend) async {
-    try {
-      final r = await Api.instance.post('/challenges', {
-        'timeControl': _lastTimeControl,
-        'color': 'random',
-        'rated': false,
-        'targetUserId': friend['userId'],
-      }) as Map;
-      final id = r['id'] as String;
-      final url = r['url'] as String;
-      if (!mounted) return;
-      await Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => ChallengeWaitScreen(
-            challengeId: id,
-            url: url,
-            timeControl: _lastTimeControl,
-            targetUsername: friend['username'] as String?,
-          ),
-        ),
+  Future<void> _challengeOnlineFriend(Map<String, dynamic> friend) =>
+      challengeFriend(
+        context,
+        userId: friend['userId'] as String,
+        username: friend['username'] as String? ?? 'Your friend',
+        timeControl: _lastTimeControl,
       );
-    } on ApiError catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(e.message)));
-      }
-    }
-  }
 
   Future<void> _loadUnread() async {
     try {

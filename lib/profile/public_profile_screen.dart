@@ -6,6 +6,7 @@ import '../core/hc_widgets.dart';
 import '../core/report_dialog.dart';
 import '../core/theme.dart';
 import '../core/ui.dart';
+import '../games/challenge_screens.dart';
 import '../games/game_screen.dart';
 import '../social/conversation_screen.dart';
 
@@ -183,16 +184,29 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                             Expanded(child: _FriendButton(relation: _relation!, busy: _busy, onTap: () => _addFriend(profile['id'] as String))),
                           ]),
                           const SizedBox(height: 10),
-                          SizedBox(
-                            width: double.infinity,
-                            child: TextButton.icon(
-                              onPressed: () => Navigator.of(context).push(
-                                MaterialPageRoute(builder: (_) => ConversationScreen(username: widget.username)),
+                          Row(children: [
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: () => Navigator.of(context).push(
+                                  MaterialPageRoute(builder: (_) => ConversationScreen(username: widget.username)),
+                                ),
+                                icon: const Icon(Icons.message_outlined),
+                                label: const Text('Message'),
                               ),
-                              icon: const Icon(Icons.message_outlined),
-                              label: const Text('Message'),
                             ),
-                          ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: FilledButton.icon(
+                                onPressed: () => challengeFriend(
+                                  context,
+                                  userId: profile['id'] as String,
+                                  username: widget.username,
+                                ),
+                                icon: const Icon(Icons.sports_esports_outlined),
+                                label: const Text('Challenge'),
+                              ),
+                            ),
+                          ]),
                         ],
                         const SizedBox(height: HcSpace.s7),
                         const SectionLabel('Recent games'),

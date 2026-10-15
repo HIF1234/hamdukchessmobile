@@ -40,6 +40,34 @@ Future<void> createAndShareChallenge(
   }
 }
 
+/// "Tunde challenges you to 5 min": a push notification, not a shared link -- the friend
+/// gets Accept/Decline (ChallengeAcceptScreen) and it expires in 10 minutes. Used from a
+/// friend's profile and from Play's friends-online row.
+Future<void> challengeFriend(
+  BuildContext context, {
+  required String userId,
+  required String username,
+  String timeControl = '10+0',
+  bool rated = false,
+}) async {
+  try {
+    final r = await Api.instance.post('/challenges', {
+      'timeControl': timeControl,
+      'color': 'random',
+      'rated': rated,
+      'targetUserId': userId,
+    }) as Map;
+    final id = r['id'] as String;
+    final url = r['url'] as String;
+    if (!context.mounted) return;
+    await Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => ChallengeWaitScreen(challengeId: id, url: url, timeControl: timeControl, targetUsername: username),
+    ));
+  } on ApiError catch (e) {
+    if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+  }
+}
+
 /// [expiresInHours] is omitted for a targeted in-app challenge's own share text (it's sent
 /// as a push instead), and included for a shared link, where the recipient may not open it
 /// right away.
