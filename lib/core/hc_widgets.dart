@@ -579,6 +579,8 @@ class PlayerBar extends StatelessWidget {
     required this.clock,
     this.rating,
     this.country,
+    this.fideTitle,
+    this.subscriptionTier,
     this.avatar,
     this.status,
     this.warn = false,
@@ -592,6 +594,14 @@ class PlayerBar extends StatelessWidget {
 
   /// ISO-3166 alpha-2; shown as a flag emoji next to the name.
   final String? country;
+
+  /// Self-reported real title ("GM", "IM", ...): shown as bold text before the name.
+  /// Untitled players past 2200 get an in-house "Expert" badge instead (never the same
+  /// styling as a real title, so the two are never confused).
+  final String? fideTitle;
+
+  /// "free", "plus" or "gold" -- a small badge after the name for plus/gold.
+  final String? subscriptionTier;
 
   /// An HcAvatar; defaults to initials.
   final Widget? avatar;
@@ -616,6 +626,11 @@ class PlayerBar extends StatelessWidget {
     final hc = context.hc;
     final r = AppSettings.instance.hideRatings ? null : rating;
     final s = status;
+    // The in-house tier is derived from the rating, so it respects hideRatings too; a real
+    // title is an identity claim, not a number, and always shows.
+    final title = fideTitle ?? (r != null && r >= 2200 ? 'Expert' : null);
+    final titleIsReal = fideTitle != null;
+    final badged = subscriptionTier == 'plus' || subscriptionTier == 'gold';
     return SizedBox(
       height: HcSize.playerBar,
       child: Padding(
@@ -634,9 +649,26 @@ class PlayerBar extends StatelessWidget {
                       Text(countryFlagEmoji(country)!, style: const TextStyle(fontSize: 13)),
                       const SizedBox(width: 4),
                     ],
+                    if (title != null) ...[
+                      Text(
+                        title,
+                        style: titleIsReal
+                            ? HcText.titleSm.copyWith(color: hc.ink, fontWeight: FontWeight.w800)
+                            : HcText.bodySm.copyWith(color: hc.ink2, fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(width: 4),
+                    ],
                     Flexible(
                       child: Text(name, style: HcText.titleSm.copyWith(color: hc.ink), maxLines: 1, overflow: TextOverflow.ellipsis),
                     ),
+                    if (badged) ...[
+                      const SizedBox(width: 4),
+                      Icon(
+                        subscriptionTier == 'gold' ? Icons.workspace_premium_rounded : Icons.star_rounded,
+                        size: 14,
+                        color: hc.gold,
+                      ),
+                    ],
                   ]),
                   DefaultTextStyle(
                     style: HcText.bodySm.copyWith(color: hc.ink2, fontFeatures: const [FontFeature.tabularFigures()]),

@@ -327,6 +327,8 @@ class _GameScreenState extends State<GameScreen> {
               name: opp.username,
               rating: opp.rating,
               country: opp.country,
+              fideTitle: opp.fideTitle,
+              subscriptionTier: opp.subscriptionTier,
               avatar: HcAvatar(name: opp.username),
               status: switch (c.opponentPresence) {
                 OpponentPresence.reconnecting => 'Disconnected, reconnecting…',
@@ -357,6 +359,8 @@ class _GameScreenState extends State<GameScreen> {
               name: me.username,
               rating: me.rating,
               country: me.country,
+              fideTitle: me.fideTitle,
+              subscriptionTier: me.subscriptionTier,
               avatar: HcAvatar(name: me.username),
               status: g.active && g.whiteToMove == c.isWhite ? 'Your move' : null,
               captured: c.isWhite ? mat.whiteCaptured : mat.blackCaptured,

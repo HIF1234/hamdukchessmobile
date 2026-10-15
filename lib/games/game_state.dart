@@ -2,13 +2,26 @@ import 'package:chess/chess.dart' as ch;
 
 /// A player shown on the board.
 class Player {
-  const Player({required this.id, required this.username, required this.rating, this.country});
+  const Player({
+    required this.id,
+    required this.username,
+    required this.rating,
+    this.country,
+    this.fideTitle,
+    this.subscriptionTier,
+  });
   final String id;
   final String username;
   final int? rating;
 
   /// ISO-3166 alpha-2, e.g. "NG" -- for the flag on the player bar.
   final String? country;
+
+  /// Self-reported real title ("GM", "IM", ...), shown as-is; null means untitled.
+  final String? fideTitle;
+
+  /// "free", "plus" or "gold" -- for the membership badge next to the name.
+  final String? subscriptionTier;
 }
 
 /// The server's view of a game. Only the server decides legality, results and clocks.
@@ -84,6 +97,8 @@ class GameState {
       username: m['username'] as String? ?? 'Player',
       rating: (m['rating'] as num?)?.toInt(),
       country: m['country'] as String?,
+      fideTitle: m['fideTitle'] as String?,
+      subscriptionTier: m['subscriptionTier'] as String?,
     );
   }
 

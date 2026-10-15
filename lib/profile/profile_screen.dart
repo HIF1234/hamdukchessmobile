@@ -228,6 +228,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     onTap: () => _editState(context),
                   ),
                   HcListRow(
+                    title: 'Chess title',
+                    subtitle: _fideTitles[account?['fideTitle'] as String?] ?? "I don't have one",
+                    onTap: () => _editFideTitle(context),
+                  ),
+                  HcListRow(
                     title: 'Passkeys',
                     subtitle: 'Sign in with your face, fingerprint or a security key',
                     onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PasskeysScreen())),
@@ -337,6 +342,55 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (chosen == null || chosen == current) return;
     try {
       await Api.instance.patch('/account', {'state': chosen});
+      await _load();
+    } on ApiError catch (e) {
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    }
+  }
+
+  static const _fideTitles = {
+    'GM': 'Grandmaster',
+    'WGM': 'Woman Grandmaster',
+    'IM': 'International Master',
+    'WIM': 'Woman International Master',
+    'FM': 'FIDE Master',
+    'WFM': 'Woman FIDE Master',
+    'CM': 'Candidate Master',
+    'WCM': 'Woman Candidate Master',
+    'NM': 'National Master',
+    'WNM': 'Woman National Master',
+  };
+
+  /// Self-reported, like country/state: restricted to the real title abbreviations, not
+  /// free text, but not checked against a live FIDE database either -- trust-based, same as
+  /// every other self-reported profile field here.
+  Future<void> _editFideTitle(BuildContext context) async {
+    final current = _me?['account']?['fideTitle'] as String?;
+    final chosen = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            ListTile(
+              title: const Text("I don't have a title"),
+              trailing: current == null ? const Icon(Icons.check_rounded) : null,
+              onTap: () => Navigator.pop(ctx, ''),
+            ),
+            for (final entry in _fideTitles.entries)
+              ListTile(
+                title: Text('${entry.key} — ${entry.value}'),
+                trailing: entry.key == current ? const Icon(Icons.check_rounded) : null,
+                onTap: () => Navigator.pop(ctx, entry.key),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (chosen == null || chosen == (current ?? '')) return;
+    try {
+      await Api.instance.patch('/account', {'fideTitle': chosen.isEmpty ? null : chosen});
       await _load();
     } on ApiError catch (e) {
       if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
