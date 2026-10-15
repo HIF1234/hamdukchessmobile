@@ -25,7 +25,9 @@ import 'game_screen.dart';
 import 'game_state.dart';
 import 'spectate_screen.dart';
 
-String _categoryName(String category) => category.isEmpty ? '' : '${category[0].toUpperCase()}${category.substring(1)}';
+String _categoryName(String category) => category.isEmpty
+    ? ''
+    : '${category[0].toUpperCase()}${category.substring(1)}';
 
 /// Lets something outside PlayScreen (the "Play 5 min" icon shortcut) ask it to start
 /// seeking -- PlayScreen is built once and kept alive by HomeShell's IndexedStack, so a
@@ -33,7 +35,8 @@ String _categoryName(String category) => category.isEmpty ? '' : '${category[0].
 class PlayScreenActions {
   static final _seekController = StreamController<String>.broadcast();
   static Stream<String> get seekRequests => _seekController.stream;
-  static void requestSeek(String timeControl) => _seekController.add(timeControl);
+  static void requestSeek(String timeControl) =>
+      _seekController.add(timeControl);
 }
 
 /// "10+0" -> "10 min" for the Quick game headline.
@@ -59,9 +62,11 @@ class _PlayScreenState extends State<PlayScreen> {
   RealtimeChannel? _channel;
   String? _error;
   int _gamesPlayed = -1; // for the spec §10 cohort; -1 until known
-  String _tier = 'free'; // decides which bots are unlocked; cached for offline use
+  String _tier =
+      'free'; // decides which bots are unlocked; cached for offline use
   bool _lowMemory = false;
-  String _lastTimeControl = '10+0'; // Quick game defaults to 10+0 on first launch
+  String _lastTimeControl =
+      '10+0'; // Quick game defaults to 10+0 on first launch
   int _unread = 0;
 
   List<GameState>? _activeGames; // online games in progress, your-move first
@@ -82,9 +87,11 @@ class _PlayScreenState extends State<PlayScreen> {
     _loadDaily();
     _loadFriendsOnline();
     _loadTournament();
-    Device.isLowMemory().then((v) {
-      if (mounted) setState(() => _lowMemory = v);
-    }).catchError((_) {});
+    Device.isLowMemory()
+        .then((v) {
+          if (mounted) setState(() => _lowMemory = v);
+        })
+        .catchError((_) {});
     _seekRequests = PlayScreenActions.seekRequests.listen((tc) {
       if (_seeking == null) _seek(tc);
     });
@@ -94,15 +101,21 @@ class _PlayScreenState extends State<PlayScreen> {
   /// bot game left mid-way (tracked locally, since bot games never touch the server).
   Future<void> _loadContinue() async {
     final bot = await ActiveGame.peek();
-    if (mounted) setState(() => _pendingBot = bot is BotActiveGame ? bot : null);
+    if (mounted) {
+      setState(() => _pendingBot = bot is BotActiveGame ? bot : null);
+    }
     try {
       final r = await Api.instance.get('/games') as Map<String, dynamic>;
-      final active = (r['active'] as List).cast<Map<String, dynamic>>().map(GameState.fromApi).toList()
-        ..sort((a, b) {
-          final aMine = a.whiteToMove == (a.white.id == _myId);
-          final bMine = b.whiteToMove == (b.white.id == _myId);
-          return aMine == bMine ? 0 : (aMine ? -1 : 1);
-        });
+      final active =
+          (r['active'] as List)
+              .cast<Map<String, dynamic>>()
+              .map(GameState.fromApi)
+              .toList()
+            ..sort((a, b) {
+              final aMine = a.whiteToMove == (a.white.id == _myId);
+              final bMine = b.whiteToMove == (b.white.id == _myId);
+              return aMine == bMine ? 0 : (aMine ? -1 : 1);
+            });
       if (mounted) setState(() => _activeGames = active);
     } on ApiError {
       // Offline or failed: the card just shows the bot game, if any.
@@ -113,7 +126,8 @@ class _PlayScreenState extends State<PlayScreen> {
     try {
       final j = await Api.instance.get('/puzzles/daily');
       final me = await Api.instance.get('/me') as Map;
-      final streak = ((me['puzzles'] as Map?)?['current_streak'] as num?)?.toInt() ?? 0;
+      final streak =
+          ((me['puzzles'] as Map?)?['current_streak'] as num?)?.toInt() ?? 0;
       final puzzle = j as Map<String, dynamic>?;
       if (mounted) {
         setState(() {
@@ -121,7 +135,12 @@ class _PlayScreenState extends State<PlayScreen> {
           _puzzleStreak = streak;
         });
       }
-      unawaited(syncHomeWidget(rating: (puzzle?['rating'] as num?)?.toInt(), streak: streak));
+      unawaited(
+        syncHomeWidget(
+          rating: (puzzle?['rating'] as num?)?.toInt(),
+          streak: streak,
+        ),
+      );
     } catch (_) {
       // Offline or no puzzle today: the card just doesn't show.
     }
@@ -129,9 +148,16 @@ class _PlayScreenState extends State<PlayScreen> {
 
   Future<void> _loadFriendsOnline() async {
     try {
-      final r = await Api.instance.get('/social/friends') as Map<String, dynamic>;
+      final r =
+          await Api.instance.get('/social/friends') as Map<String, dynamic>;
       final accepted = (r['accepted'] as List).cast<Map<String, dynamic>>();
-      if (mounted) setState(() => _onlineFriends = accepted.where((f) => f['online'] == true).toList());
+      if (mounted) {
+        setState(
+          () => _onlineFriends = accepted
+              .where((f) => f['online'] == true)
+              .toList(),
+        );
+      }
     } catch (_) {
       // Offline or failed: the row just doesn't show.
     }
@@ -141,9 +167,18 @@ class _PlayScreenState extends State<PlayScreen> {
     try {
       final r = await Api.instance.get('/tournaments') as Map<String, dynamic>;
       final rows = (r['tournaments'] as List).cast<Map<String, dynamic>>();
-      final mine = rows.where((t) => t['joined'] == true && t['status'] != 'completed').toList()
-        ..sort((a, b) => (a['starts_at'] as String? ?? '').compareTo(b['starts_at'] as String? ?? ''));
-      if (mounted) setState(() => _joinedTournament = mine.isEmpty ? null : mine.first);
+      final mine =
+          rows
+              .where((t) => t['joined'] == true && t['status'] != 'completed')
+              .toList()
+            ..sort(
+              (a, b) => (a['starts_at'] as String? ?? '').compareTo(
+                b['starts_at'] as String? ?? '',
+              ),
+            );
+      if (mounted) {
+        setState(() => _joinedTournament = mine.isEmpty ? null : mine.first);
+      }
     } catch (_) {
       // Offline or failed: the section just doesn't show.
     }
@@ -151,23 +186,42 @@ class _PlayScreenState extends State<PlayScreen> {
 
   Future<void> _challengeOnlineFriend(Map<String, dynamic> friend) async {
     try {
-      final r = await Api.instance.post('/challenges', {'timeControl': _lastTimeControl, 'color': 'random', 'rated': false}) as Map;
+      final r = await Api.instance.post('/challenges', {
+        'timeControl': _lastTimeControl,
+        'color': 'random',
+        'rated': false,
+      }) as Map;
       final id = r['id'] as String;
       final url = r['url'] as String;
-      await Api.instance.post('/social/messages/send', {'recipientId': friend['userId'], 'content': shareText(_lastTimeControl, url)});
+      await Api.instance.post('/social/messages/send', {
+        'recipientId': friend['userId'],
+        'content': shareText(_lastTimeControl, url),
+      });
       if (!mounted) return;
-      await Navigator.of(context).push(MaterialPageRoute(
-        builder: (_) => ChallengeWaitScreen(challengeId: id, url: url, timeControl: _lastTimeControl),
-      ));
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => ChallengeWaitScreen(
+            challengeId: id,
+            url: url,
+            timeControl: _lastTimeControl,
+          ),
+        ),
+      );
     } on ApiError catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
+      }
     }
   }
 
   Future<void> _loadUnread() async {
     try {
       final r = await Api.instance.get('/notifications') as Map;
-      if (mounted) setState(() => _unread = (r['unread'] as num?)?.toInt() ?? 0);
+      if (mounted) {
+        setState(() => _unread = (r['unread'] as num?)?.toInt() ?? 0);
+      }
     } catch (_) {
       // Offline or failed: the bell just shows no count.
     }
@@ -186,7 +240,10 @@ class _PlayScreenState extends State<PlayScreen> {
     try {
       final me = await Api.instance.get('/me') as Map;
       final ratings = (me['ratings'] as List).cast<Map>();
-      _gamesPlayed = ratings.fold<int>(0, (n, r) => n + ((r['games_played'] as num?)?.toInt() ?? 0));
+      _gamesPlayed = ratings.fold<int>(
+        0,
+        (n, r) => n + ((r['games_played'] as num?)?.toInt() ?? 0),
+      );
       final tier = (me['account'] as Map)['tier'] as String? ?? 'free';
       await store.write('me_tier', tier);
       if (mounted) setState(() => _tier = tier);
@@ -197,7 +254,9 @@ class _PlayScreenState extends State<PlayScreen> {
 
   Future<void> _challengeFriend() async {
     final tcs = widget.config.timeControls;
-    var tc = tcs.firstWhere((t) => t['id'] == '10+0', orElse: () => tcs.first)['id'] as String;
+    var tc =
+        tcs.firstWhere((t) => t['id'] == '10+0', orElse: () => tcs.first)['id']
+            as String;
     var colour = 'random';
     var rated = false;
     final go = await showModalBottomSheet<bool>(
@@ -207,40 +266,62 @@ class _PlayScreenState extends State<PlayScreen> {
         builder: (ctx, set) => SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(16),
-            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              Text('Challenge a friend', style: Theme.of(ctx).textTheme.titleLarge),
-              const SizedBox(height: 12),
-              Wrap(spacing: 8, runSpacing: 8, children: [
-                for (final t in tcs)
-                  ChoiceChip(label: Text(t['id'] as String), selected: tc == t['id'], onSelected: (_) => set(() => tc = t['id'] as String)),
-              ]),
-              const SizedBox(height: 12),
-              SegmentedButton<String>(
-                segments: const [
-                  ButtonSegment(value: 'white', label: Text('White')),
-                  ButtonSegment(value: 'random', label: Text('Random')),
-                  ButtonSegment(value: 'black', label: Text('Black')),
-                ],
-                selected: {colour},
-                onSelectionChanged: (s) => set(() => colour = s.first),
-              ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Rated'),
-                value: rated,
-                onChanged: (v) => set(() => rated = v),
-              ),
-              FilledButton.icon(
-                onPressed: () => Navigator.pop(ctx, true),
-                icon: const Icon(Icons.share),
-                label: const Text('Create link and share'),
-              ),
-            ]),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Challenge a friend',
+                  style: Theme.of(ctx).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final t in tcs)
+                      ChoiceChip(
+                        label: Text(t['id'] as String),
+                        selected: tc == t['id'],
+                        onSelected: (_) => set(() => tc = t['id'] as String),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment(value: 'white', label: Text('White')),
+                    ButtonSegment(value: 'random', label: Text('Random')),
+                    ButtonSegment(value: 'black', label: Text('Black')),
+                  ],
+                  selected: {colour},
+                  onSelectionChanged: (s) => set(() => colour = s.first),
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Rated'),
+                  value: rated,
+                  onChanged: (v) => set(() => rated = v),
+                ),
+                FilledButton.icon(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  icon: const Icon(Icons.share),
+                  label: const Text('Create link and share'),
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
-    if (go == true && mounted) await createAndShareChallenge(context, timeControl: tc, color: colour, rated: rated);
+    if (go == true && mounted) {
+      await createAndShareChallenge(
+        context,
+        timeControl: tc,
+        color: colour,
+        rated: rated,
+      );
+    }
   }
 
   Future<void> _playBot(Map<String, dynamic> bot) async {
@@ -252,64 +333,106 @@ class _PlayScreenState extends State<PlayScreen> {
         builder: (ctx, set) => SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(HcSpace.s5),
-            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              Row(children: [
-                SizedBox(
-                  width: 96,
-                  height: 96,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(HcRadius.md),
-                    child: ColoredBox(
-                      color: hcStageFor(bot['rating'] as num),
-                      child: AppSettings.instance.lowData
-                          ? Center(child: Text(hcInitials(bot['name'] as String), style: HcText.ratingXl.copyWith(color: HcColors.forest)))
-                          : Image.network(bot['portraitUrl'] as String, fit: BoxFit.cover, color: hcStageFor(bot['rating'] as num),
-                              colorBlendMode: BlendMode.multiply),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    SizedBox(
+                      width: 96,
+                      height: 96,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(HcRadius.md),
+                        child: ColoredBox(
+                          color: hcStageFor(bot['rating'] as num),
+                          child: AppSettings.instance.lowData
+                              ? Center(
+                                  child: Text(
+                                    hcInitials(bot['name'] as String),
+                                    style: HcText.ratingXl.copyWith(
+                                      color: HcColors.forest,
+                                    ),
+                                  ),
+                                )
+                              : Image.network(
+                                  bot['portraitUrl'] as String,
+                                  fit: BoxFit.cover,
+                                  color: hcStageFor(bot['rating'] as num),
+                                  colorBlendMode: BlendMode.multiply,
+                                ),
+                        ),
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: HcSpace.s4),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            bot['name'] as String,
+                            style: HcText.displayMd.copyWith(color: ctx.hc.ink),
+                          ),
+                          const SizedBox(height: 2),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.location_on_outlined,
+                                size: 14,
+                                color: ctx.hc.ink2,
+                              ),
+                              const SizedBox(width: 2),
+                              Expanded(
+                                child: Text(
+                                  '${bot['hometown']} · ${hcNumber((bot['rating'] as num).toInt())}',
+                                  style: HcText.bodySm.copyWith(
+                                    color: ctx.hc.ink2,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: HcSpace.s4),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(bot['name'] as String, style: HcText.displayMd.copyWith(color: ctx.hc.ink)),
-                      const SizedBox(height: 2),
-                      Row(children: [
-                        Icon(Icons.location_on_outlined, size: 14, color: ctx.hc.ink2),
-                        const SizedBox(width: 2),
-                        Expanded(
-                            child: Text('${bot['hometown']} · ${hcNumber((bot['rating'] as num).toInt())}',
-                                style: HcText.bodySm.copyWith(color: ctx.hc.ink2), overflow: TextOverflow.ellipsis)),
-                      ]),
-                    ],
-                  ),
+                const SizedBox(height: HcSpace.s4),
+                Text(
+                  '“${bot['catchphrase']}”',
+                  style: HcText.bodySm.copyWith(color: ctx.hc.ink3),
                 ),
-              ]),
-              const SizedBox(height: HcSpace.s4),
-              Text('“${bot['catchphrase']}”', style: HcText.bodySm.copyWith(color: ctx.hc.ink3)),
-              const SizedBox(height: HcSpace.s5),
-              SegmentedButton<String>(
-                segments: const [
-                  ButtonSegment(value: 'w', label: Text('White')),
-                  ButtonSegment(value: 'random', label: Text('Random')),
-                  ButtonSegment(value: 'b', label: Text('Black')),
-                ],
-                selected: {side},
-                onSelectionChanged: (s) => set(() => side = s.first),
-              ),
-              const SizedBox(height: HcSpace.s4),
-              PlayButton(label: 'Play ${bot['name']}', onPressed: () => Navigator.pop(ctx, true)),
-            ]),
+                const SizedBox(height: HcSpace.s5),
+                SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment(value: 'w', label: Text('White')),
+                    ButtonSegment(value: 'random', label: Text('Random')),
+                    ButtonSegment(value: 'b', label: Text('Black')),
+                  ],
+                  selected: {side},
+                  onSelectionChanged: (s) => set(() => side = s.first),
+                ),
+                const SizedBox(height: HcSpace.s4),
+                PlayButton(
+                  label: 'Play ${bot['name']}',
+                  onPressed: () => Navigator.pop(ctx, true),
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
     if (go != true || !mounted) return;
-    final playWhite = side == 'random' ? DateTime.now().millisecond.isEven : side == 'w';
-    await Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => BotGameScreen(bot: bot, playWhite: playWhite),
-    ));
+    final playWhite = side == 'random'
+        ? DateTime.now().millisecond.isEven
+        : side == 'w';
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => BotGameScreen(bot: bot, playWhite: playWhite),
+      ),
+    );
   }
 
   String get _myId => Supabase.instance.client.auth.currentUser!.id;
@@ -348,21 +471,30 @@ class _PlayScreenState extends State<PlayScreen> {
 
   void _listenForGame() {
     final client = Supabase.instance.client;
-    void onInsert(PostgresChangePayload p) => _open(p.newRecord['id'] as String);
+    void onInsert(PostgresChangePayload p) =>
+        _open(p.newRecord['id'] as String);
     _channel = client
         .channel('seek:$_myId')
         .onPostgresChanges(
           event: PostgresChangeEvent.insert,
           schema: 'public',
           table: 'games',
-          filter: PostgresChangeFilter(type: PostgresChangeFilterType.eq, column: 'white_id', value: _myId),
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'white_id',
+            value: _myId,
+          ),
           callback: onInsert,
         )
         .onPostgresChanges(
           event: PostgresChangeEvent.insert,
           schema: 'public',
           table: 'games',
-          filter: PostgresChangeFilter(type: PostgresChangeFilterType.eq, column: 'black_id', value: _myId),
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'black_id',
+            value: _myId,
+          ),
           callback: onInsert,
         )
         .subscribe();
@@ -396,9 +528,12 @@ class _PlayScreenState extends State<PlayScreen> {
     await _stopWaiting();
     if (!mounted) return;
     setState(() => _seeking = null);
-    await Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => GameScreen(gameId: gameId, myId: _myId, gamesPlayed: _gamesPlayed),
-    ));
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) =>
+            GameScreen(gameId: gameId, myId: _myId, gamesPlayed: _gamesPlayed),
+      ),
+    );
   }
 
   @override
@@ -414,194 +549,286 @@ class _PlayScreenState extends State<PlayScreen> {
   Widget build(BuildContext context) {
     final hc = context.hc;
     final tcs = widget.config.timeControls;
-    final quickGame = tcs.firstWhere((t) => t['id'] == _lastTimeControl, orElse: () => tcs.firstWhere((t) => t['id'] == '10+0', orElse: () => tcs.first));
-    return ListView(
-      padding: EdgeInsets.zero,
-      children: [
-        ScreenHeader(
-          title: 'Play',
-          subtitle: 'Find an opponent or train against a bot',
-          actions: [
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.notifications_none_rounded),
-                  onPressed: () => Navigator.of(context)
-                      .push(MaterialPageRoute(builder: (_) => const NotificationsScreen()))
-                      .then((_) => _loadUnread()),
+    final quickGame = tcs.firstWhere(
+      (t) => t['id'] == _lastTimeControl,
+      orElse: () =>
+          tcs.firstWhere((t) => t['id'] == '10+0', orElse: () => tcs.first),
+    );
+    return RefreshIndicator(
+      onRefresh: () => Future.wait([
+        _loadMe(),
+        _loadUnread(),
+        _loadContinue(),
+        _loadDaily(),
+        _loadFriendsOnline(),
+        _loadTournament(),
+      ]),
+      child: ListView(
+        padding: EdgeInsets.zero,
+        children: [
+          ScreenHeader(
+            title: 'Play',
+            subtitle: 'Find an opponent or train against a bot',
+            actions: [
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.notifications_none_rounded),
+                    onPressed: () => Navigator.of(context)
+                        .push(
+                          MaterialPageRoute(
+                            builder: (_) => const NotificationsScreen(),
+                          ),
+                        )
+                        .then((_) => _loadUnread()),
+                  ),
+                  if (_unread > 0)
+                    Positioned(top: 6, right: 6, child: HcBadge.count(_unread)),
+                ],
+              ),
+              IconButton(
+                icon: const Icon(Icons.history_rounded),
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const GameHistoryScreen()),
                 ),
-                if (_unread > 0) Positioned(top: 6, right: 6, child: HcBadge.count(_unread)),
-              ],
-            ),
-            IconButton(
-              icon: const Icon(Icons.history_rounded),
-              onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const GameHistoryScreen())),
-            ),
-          ],
-        ),
-        if (AppSettings.instance.lowData)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(HcSpace.s4, 0, HcSpace.s4, HcSpace.s2),
-            child: Text('${DataMeter.label} this session', style: HcText.bodySm.copyWith(color: hc.ink3)),
+              ),
+            ],
           ),
-        _ContinueCard(games: _activeGames, pendingBot: _pendingBot, myId: _myId, config: widget.config),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(HcSpace.s4, 0, HcSpace.s4, HcSpace.s4),
-          child: HeroCard(
+          if (AppSettings.instance.lowData)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                HcSpace.s4,
+                0,
+                HcSpace.s4,
+                HcSpace.s2,
+              ),
+              child: Text(
+                '${DataMeter.label} this session',
+                style: HcText.bodySm.copyWith(color: hc.ink3),
+              ),
+            ),
+          _ContinueCard(
+            games: _activeGames,
+            pendingBot: _pendingBot,
+            myId: _myId,
+            config: widget.config,
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              HcSpace.s4,
+              0,
+              HcSpace.s4,
+              HcSpace.s4,
+            ),
+            child: HeroCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  HeroCard.overline('Quick game'),
+                  const SizedBox(height: HcSpace.s1),
+                  Text(
+                    _quickGameLabel(quickGame['id'] as String),
+                    style: HcText.displayXl.copyWith(color: HcColors.onForest),
+                  ),
+                  const SizedBox(height: 2),
+                  HeroCard.sub(
+                    '${_categoryName(quickGame['category'] as String)} · rated · your last time control',
+                  ),
+                  const SizedBox(height: HcSpace.s4),
+                  PlayButton(
+                    label: 'Play',
+                    onPressed: _seeking == null
+                        ? () => _seek(quickGame['id'] as String)
+                        : null,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: HcSpace.s4),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                HeroCard.overline('Quick game'),
-                const SizedBox(height: HcSpace.s1),
-                Text(_quickGameLabel(quickGame['id'] as String), style: HcText.displayXl.copyWith(color: HcColors.onForest)),
-                const SizedBox(height: 2),
-                HeroCard.sub('${_categoryName(quickGame['category'] as String)} · rated · your last time control'),
+                const SectionLabel('Time controls'),
+                if (_error != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: HcSpace.s2),
+                    child: HcBanner(
+                      icon: Icons.error_outline_rounded,
+                      text: _error!,
+                      tone: HcBannerTone.error,
+                    ),
+                  ),
+                GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 4,
+                    mainAxisExtent: HcSize.tcTile,
+                    crossAxisSpacing: HcSpace.s2,
+                    mainAxisSpacing: HcSpace.s2,
+                  ),
+                  itemCount: tcs.length,
+                  itemBuilder: (context, i) {
+                    final tc = tcs[i];
+                    final id = tc['id'] as String;
+                    return TimeControlTile(
+                      id: id,
+                      category: tc['category'] as String,
+                      searching: _seeking == id,
+                      dimmed: _seeking != null && _seeking != id,
+                      onTap: _seeking == null ? () => _seek(id) : null,
+                    );
+                  },
+                ),
+                if (_seeking != null) ...[
+                  const SizedBox(height: HcSpace.s2),
+                  Center(
+                    child: TextButton(
+                      onPressed: _cancel,
+                      child: const Text('Cancel'),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: HcSpace.s4),
-                PlayButton(label: 'Play', onPressed: _seeking == null ? () => _seek(quickGame['id'] as String) : null),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _seeking == null ? _challengeFriend : null,
+                        icon: const Icon(Icons.person_add_rounded, size: 20),
+                        label: const Text('Play a friend'),
+                      ),
+                    ),
+                    const SizedBox(width: HcSpace.s3),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const SpectateScreen(),
+                          ),
+                        ),
+                        icon: const Icon(Icons.visibility_rounded, size: 20),
+                        label: const Text('Watch live'),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: HcSpace.s7),
+                if (_dailyPuzzle != null) ...[
+                  _DailyPuzzleCard(
+                    puzzle: _dailyPuzzle!,
+                    streak: _puzzleStreak,
+                  ),
+                  const SizedBox(height: HcSpace.s7),
+                ],
+                if (_onlineFriends.isNotEmpty) ...[
+                  const SectionLabel('Friends online'),
+                  const SizedBox(height: HcSpace.s2),
+                  SizedBox(
+                    height: 76,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: _onlineFriends.length,
+                      separatorBuilder: (context, i) =>
+                          const SizedBox(width: HcSpace.s3),
+                      itemBuilder: (context, i) {
+                        final f = _onlineFriends[i];
+                        return _OnlineFriendTile(
+                          friend: f,
+                          onTap: () => _challengeOnlineFriend(f),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: HcSpace.s7),
+                ],
+                if (_joinedTournament != null) ...[
+                  const SectionLabel('Your tournament'),
+                  const SizedBox(height: HcSpace.s2),
+                  FeaturedTournamentHero(row: _joinedTournament!),
+                  const SizedBox(height: HcSpace.s3),
+                ],
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const TournamentsScreen(),
+                          ),
+                        ),
+                        icon: const Icon(Icons.emoji_events_outlined, size: 20),
+                        label: const Text('All tournaments'),
+                      ),
+                    ),
+                    const SizedBox(width: HcSpace.s3),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const LocalTournamentHomeScreen(),
+                          ),
+                        ),
+                        icon: const Icon(
+                          Icons.wifi_tethering_rounded,
+                          size: 20,
+                        ),
+                        label: const Text('Host local'),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: HcSpace.s7),
+                const SectionLabel('Naija bots'),
+                Text(
+                  "Play offline, no data needed. Bot games don't change your rating.",
+                  style: HcText.bodySm.copyWith(color: hc.ink2),
+                ),
+                if (_lowMemory)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      'The strongest bots are hidden on this phone to keep it smooth.',
+                      style: HcText.bodySm.copyWith(color: hc.ink2),
+                    ),
+                  ),
               ],
             ),
           ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: HcSpace.s4),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const SectionLabel('Time controls'),
-            if (_error != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: HcSpace.s2),
-                child: HcBanner(icon: Icons.error_outline_rounded, text: _error!, tone: HcBannerTone.error),
-              ),
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 4,
-                mainAxisExtent: HcSize.tcTile,
-                crossAxisSpacing: HcSpace.s2,
-                mainAxisSpacing: HcSpace.s2,
-              ),
-              itemCount: tcs.length,
-              itemBuilder: (context, i) {
-                final tc = tcs[i];
-                final id = tc['id'] as String;
-                return TimeControlTile(
-                  id: id,
-                  category: tc['category'] as String,
-                  searching: _seeking == id,
-                  dimmed: _seeking != null && _seeking != id,
-                  onTap: _seeking == null ? () => _seek(id) : null,
-                );
-              },
-            ),
-            if (_seeking != null) ...[
-              const SizedBox(height: HcSpace.s2),
-              Center(child: TextButton(onPressed: _cancel, child: const Text('Cancel'))),
-            ],
-            const SizedBox(height: HcSpace.s4),
-            Row(children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _seeking == null ? _challengeFriend : null,
-                  icon: const Icon(Icons.person_add_rounded, size: 20),
-                  label: const Text('Play a friend'),
-                ),
-              ),
-              const SizedBox(width: HcSpace.s3),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SpectateScreen())),
-                  icon: const Icon(Icons.visibility_rounded, size: 20),
-                  label: const Text('Watch live'),
-                ),
-              ),
-            ]),
-            const SizedBox(height: HcSpace.s7),
-            if (_dailyPuzzle != null) ...[
-              _DailyPuzzleCard(puzzle: _dailyPuzzle!, streak: _puzzleStreak),
-              const SizedBox(height: HcSpace.s7),
-            ],
-            if (_onlineFriends.isNotEmpty) ...[
-              const SectionLabel('Friends online'),
-              const SizedBox(height: HcSpace.s2),
-              SizedBox(
-                height: 76,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: _onlineFriends.length,
-                  separatorBuilder: (context, i) => const SizedBox(width: HcSpace.s3),
-                  itemBuilder: (context, i) {
-                    final f = _onlineFriends[i];
-                    return _OnlineFriendTile(friend: f, onTap: () => _challengeOnlineFriend(f));
-                  },
-                ),
-              ),
-              const SizedBox(height: HcSpace.s7),
-            ],
-            if (_joinedTournament != null) ...[
-              const SectionLabel('Your tournament'),
-              const SizedBox(height: HcSpace.s2),
-              FeaturedTournamentHero(row: _joinedTournament!),
-              const SizedBox(height: HcSpace.s3),
-            ],
-            Row(children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TournamentsScreen())),
-                  icon: const Icon(Icons.emoji_events_outlined, size: 20),
-                  label: const Text('All tournaments'),
-                ),
-              ),
-              const SizedBox(width: HcSpace.s3),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LocalTournamentHomeScreen())),
-                  icon: const Icon(Icons.wifi_tethering_rounded, size: 20),
-                  label: const Text('Host local'),
-                ),
-              ),
-            ]),
-            const SizedBox(height: HcSpace.s7),
-            const SectionLabel('Naija bots'),
-            Text(
-              "Play offline, no data needed. Bot games don't change your rating.",
-              style: HcText.bodySm.copyWith(color: hc.ink2),
-            ),
-            if (_lowMemory)
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text('The strongest bots are hidden on this phone to keep it smooth.', style: HcText.bodySm.copyWith(color: hc.ink2)),
-              ),
-          ]),
-        ),
-        const SizedBox(height: HcSpace.s3),
-        SizedBox(
-          height: 290,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: HcSpace.s4),
-            children: [
-              for (final b in widget.config.bots)
-                // The 2400+ bots search deepest; skip them on phones under 3 GB for now (spec §3).
-                if (!(_lowMemory && (b['rating'] as num) >= 2400))
-                  Padding(
-                    padding: const EdgeInsets.only(right: HcSpace.s3),
-                    child: PersonaCard(
-                      name: b['name'] as String,
-                      hometown: b['hometown'] as String,
-                      rating: (b['rating'] as num).toInt(),
-                      catchphrase: b['catchphrase'] as String,
-                      portraitUrl: b['portraitUrl'] as String?,
-                      locked: b['tier'] == 'plus' && _tier == 'free',
-                      lowData: AppSettings.instance.lowData,
-                      onTap: b['tier'] == 'plus' && _tier == 'free' ? () => showSubscriptionSheet(context, _tier) : () => _playBot(b),
+          const SizedBox(height: HcSpace.s3),
+          SizedBox(
+            height: 290,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: HcSpace.s4),
+              children: [
+                for (final b in widget.config.bots)
+                  // The 2400+ bots search deepest; skip them on phones under 3 GB for now (spec §3).
+                  if (!(_lowMemory && (b['rating'] as num) >= 2400))
+                    Padding(
+                      padding: const EdgeInsets.only(right: HcSpace.s3),
+                      child: PersonaCard(
+                        name: b['name'] as String,
+                        hometown: b['hometown'] as String,
+                        rating: (b['rating'] as num).toInt(),
+                        catchphrase: b['catchphrase'] as String,
+                        portraitUrl: b['portraitUrl'] as String?,
+                        locked: b['tier'] == 'plus' && _tier == 'free',
+                        lowData: AppSettings.instance.lowData,
+                        onTap: b['tier'] == 'plus' && _tier == 'free'
+                            ? () => showSubscriptionSheet(context, _tier)
+                            : () => _playBot(b),
+                      ),
                     ),
-                  ),
-            ],
+              ],
+            ),
           ),
-        ),
-        const SizedBox(height: HcSpace.s4),
-      ],
+          const SizedBox(height: HcSpace.s4),
+        ],
+      ),
     );
   }
 }
@@ -609,7 +836,12 @@ class _PlayScreenState extends State<PlayScreen> {
 /// Unfinished games, your-move ones first: online games in progress plus a bot game left
 /// mid-way (bot games never reach the server, so that one comes from ActiveGame instead).
 class _ContinueCard extends StatelessWidget {
-  const _ContinueCard({required this.games, required this.pendingBot, required this.myId, required this.config});
+  const _ContinueCard({
+    required this.games,
+    required this.pendingBot,
+    required this.myId,
+    required this.config,
+  });
   final List<GameState>? games;
   final ActiveGame? pendingBot;
   final String myId;
@@ -622,14 +854,20 @@ class _ContinueCard extends StatelessWidget {
     if (online.isEmpty && bot is! BotActiveGame) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.fromLTRB(HcSpace.s4, 0, HcSpace.s4, HcSpace.s4),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const SectionLabel('Continue'),
-        const SizedBox(height: HcSpace.s2),
-        HcListGroup(children: [
-          for (final g in online) _ContinueGameRow(game: g, myId: myId),
-          if (bot is BotActiveGame) _ContinueBotRow(bot: bot, config: config),
-        ]),
-      ]),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SectionLabel('Continue'),
+          const SizedBox(height: HcSpace.s2),
+          HcListGroup(
+            children: [
+              for (final g in online) _ContinueGameRow(game: g, myId: myId),
+              if (bot is BotActiveGame)
+                _ContinueBotRow(bot: bot, config: config),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
@@ -647,9 +885,14 @@ class _ContinueGameRow extends StatelessWidget {
     return HcListRow(
       leading: HcAvatar(name: opponent.username, size: HcSize.avatarMd),
       title: 'vs ${opponent.username}',
-      subtitle: '${yourMove ? 'Your move' : "Opponent's move"} · ${game.timeControl}',
+      subtitle:
+          '${yourMove ? 'Your move' : "Opponent's move"} · ${game.timeControl}',
       trailing: const Icon(Icons.chevron_right_rounded),
-      onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => GameScreen(gameId: game.id, myId: myId))),
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => GameScreen(gameId: game.id, myId: myId),
+        ),
+      ),
     );
   }
 }
@@ -669,9 +912,15 @@ class _ContinueBotRow extends StatelessWidget {
       title: 'vs ${persona['name']}',
       subtitle: 'Your move · bot game',
       trailing: const Icon(Icons.chevron_right_rounded),
-      onTap: () => Navigator.of(context).push(MaterialPageRoute(
-        builder: (_) => BotGameScreen(bot: persona, playWhite: bot.playWhite, initialSanMoves: bot.sanMoves),
-      )),
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => BotGameScreen(
+            bot: persona,
+            playWhite: bot.playWhite,
+            initialSanMoves: bot.sanMoves,
+          ),
+        ),
+      ),
     );
   }
 }
@@ -687,21 +936,36 @@ class _DailyPuzzleCard extends StatelessWidget {
     final hc = context.hc;
     return InkWell(
       borderRadius: BorderRadius.circular(HcRadius.md),
-      onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DailyPuzzleScreen())),
+      onTap: () => Navigator.of(context)
+          .push(MaterialPageRoute(builder: (_) => const DailyPuzzleScreen())),
       child: Container(
         padding: const EdgeInsets.all(HcSpace.s4),
-        decoration: BoxDecoration(color: hc.greenSoft, borderRadius: BorderRadius.circular(HcRadius.md)),
-        child: Row(children: [
-          Icon(Icons.extension_rounded, color: hc.green, size: 28),
-          const SizedBox(width: HcSpace.s3),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Daily puzzle', style: HcText.titleMd.copyWith(color: hc.ink)),
-              Text('Rated ${puzzle['rating']} · one tap to solve', style: HcText.bodySm.copyWith(color: hc.ink2)),
-            ]),
-          ),
-          if (streak > 0) HcBadge.streak(streak),
-        ]),
+        decoration: BoxDecoration(
+          color: hc.greenSoft,
+          borderRadius: BorderRadius.circular(HcRadius.md),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.extension_rounded, color: hc.green, size: 28),
+            const SizedBox(width: HcSpace.s3),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Daily puzzle',
+                    style: HcText.titleMd.copyWith(color: hc.ink),
+                  ),
+                  Text(
+                    'Rated ${puzzle['rating']} · one tap to solve',
+                    style: HcText.bodySm.copyWith(color: hc.ink2),
+                  ),
+                ],
+              ),
+            ),
+            if (streak > 0) HcBadge.streak(streak),
+          ],
+        ),
       ),
     );
   }
@@ -720,16 +984,23 @@ class _OnlineFriendTile extends StatelessWidget {
       onTap: onTap,
       child: SizedBox(
         width: 64,
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          HcAvatar(name: friend['username'] as String? ?? '?', size: HcSize.avatarMd, online: true),
-          const SizedBox(height: 4),
-          Text(
-            friend['username'] as String? ?? '',
-            style: HcText.bodySm.copyWith(color: hc.ink2),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ]),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            HcAvatar(
+              name: friend['username'] as String? ?? '?',
+              size: HcSize.avatarMd,
+              online: true,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              friend['username'] as String? ?? '',
+              style: HcText.bodySm.copyWith(color: hc.ink2),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
       ),
     );
   }
