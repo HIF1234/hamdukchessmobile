@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../auth/passkeys_screen.dart';
@@ -10,6 +11,7 @@ import '../core/api.dart';
 import '../core/hc_widgets.dart';
 import '../core/nigeria_states.dart';
 import '../core/push.dart';
+import '../core/qr_scan_screen.dart';
 import '../core/settings.dart';
 import '../core/theme.dart';
 import '../core/ui.dart';
@@ -70,7 +72,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
         children: [
           ScreenHeader(
             title: 'Profile',
-            actions: [IconButton(onPressed: _scrollToSettings, icon: const Icon(Icons.settings_rounded))],
+            actions: [
+              IconButton(
+                onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const QrScanScreen())),
+                icon: const Icon(Icons.qr_code_scanner_rounded),
+              ),
+              if (account?['username'] != null)
+                IconButton(onPressed: () => _showMyQr(context, account!['username'] as String), icon: const Icon(Icons.qr_code_rounded)),
+              IconButton(onPressed: _scrollToSettings, icon: const Icon(Icons.settings_rounded)),
+            ],
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: HcSpace.s4),
@@ -239,6 +249,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
         // Best-effort; the device-local preference above is what actually matters today.
       }
     }
+  }
+
+  /// Someone nearby scans this (QrScanScreen) to open your profile and add you as a friend.
+  Future<void> _showMyQr(BuildContext context, String username) async {
+    final url = 'https://play.chess.hamduk.com.ng/profile/$username';
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.all(HcSpace.s6),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text('Scan to add $username', style: HcText.titleMd.copyWith(color: ctx.hc.ink)),
+            const SizedBox(height: HcSpace.s4),
+            QrImageView(data: url, size: 220),
+          ]),
+        ),
+      ),
+    );
   }
 
   Future<void> _editState(BuildContext context) async {

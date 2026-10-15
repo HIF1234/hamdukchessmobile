@@ -84,3 +84,14 @@ String? challengeIdFrom(Uri uri) => _idAfter(uri, 'challenge');
 
 /// The game id in a game link (/play/{id}), or null if it isn't one.
 String? gameIdFrom(Uri uri) => _idAfter(uri, 'play');
+
+final _username = RegExp(r'^[a-z0-9_]{3,20}$');
+
+/// The username in a profile link (/profile/{username}), or null if it isn't one -- for the
+/// "scan to add as friend" QR code.
+String? profileUsernameFrom(Uri uri) {
+  if (uri.host != 'play.chess.hamduk.com.ng') return null;
+  final seg = uri.pathSegments;
+  if (seg.length != 2 || seg[0] != 'profile') return null;
+  return _username.hasMatch(seg[1]) ? seg[1] : null;
+}

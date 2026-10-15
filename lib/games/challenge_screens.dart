@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -152,6 +153,10 @@ class _ChallengeWaitScreenState extends State<ChallengeWaitScreen> {
               if (widget.targetUsername == null) ...[
                 const SizedBox(height: 24),
                 FilledButton.icon(onPressed: _share, icon: const Icon(Icons.share), label: const Text('Share the link again')),
+                const SizedBox(height: 24),
+                const Text('Or show this to someone in the same room:', textAlign: TextAlign.center),
+                const SizedBox(height: 12),
+                Center(child: QrImageView(data: widget.url, size: 180)),
               ],
             ],
           ]),
