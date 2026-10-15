@@ -1,8 +1,13 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hamduk_chess/auth/sign_in_screen.dart';
+import 'package:hamduk_chess/core/api.dart';
 import 'package:hamduk_chess/core/app_config.dart';
 import 'package:hamduk_chess/core/links.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 
 // No googleWebClientId, so the Google button stays hidden and these tests exercise the
 // email/password form the same way they would before Google sign-in existed.
@@ -34,6 +39,8 @@ void main() {
   });
 
   group('sign-in screen', () {
+    tearDown(() => Api.client = http.Client());
+
     // The sign-in panel (wordmark, form, passkey/Google/guest options, mode links) is taller
     // than the default test surface; later links like "Forgot password?" need to actually be
     // on screen for tap() to land on them rather than silently missing.
@@ -110,6 +117,34 @@ void main() {
       await t.tap(find.widgetWithText(FilledButton, 'Create account'));
       await t.pump();
       expect(find.text("Enter a parent or guardian's email."), findsOneWidget);
+    });
+
+    testWidgets('checks a username against the server as you type', (t) async {
+      Api.client = MockClient((request) async {
+        final username = request.url.queryParameters['username'];
+        if (username == 'admin') {
+          return http.Response(jsonEncode({'available': false, 'reason': 'blocked'}), 200);
+        }
+        return http.Response(
+          jsonEncode({'available': false, 'reason': 'taken', 'suggestion': '${username}23'}),
+          200,
+        );
+      });
+      await open(t);
+      await t.tap(find.text('New here? Create a free account'));
+      await t.pump();
+      await t.enterText(find.widgetWithText(TextField, 'Username (optional)'), 'akin_chess');
+      await t.pump();
+      expect(find.text('Checking…'), findsOneWidget);
+      await t.pump(const Duration(milliseconds: 600)); // fires the debounce timer and the request
+      expect(find.text('akin_chess is taken. Try akin_chess23.'), findsOneWidget);
+
+      await t.enterText(find.widgetWithText(TextField, 'Email'), 'ade@example.com');
+      await t.enterText(find.widgetWithText(TextField, 'Password'), 'secret123');
+      await t.tap(find.text('18 or over'));
+      await t.tap(find.byType(Checkbox));
+      await t.pump();
+      expect(t.widget<FilledButton>(find.widgetWithText(FilledButton, 'Create account')).onPressed, isNull);
     });
 
     testWidgets('forgot password hides the password field', (t) async {

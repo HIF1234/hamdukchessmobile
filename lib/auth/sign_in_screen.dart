@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../core/api.dart';
 import '../core/app_config.dart';
 import '../core/hc_widgets.dart';
 import '../core/nigeria_states.dart';
@@ -47,12 +50,17 @@ class _SignInScreenState extends State<SignInScreen> {
   /// play needs a guardian's approval first.
   String? _ageBracket;
 
+  Timer? _usernameDebounce;
+  String? _usernameHelper;
+  bool _usernameBlocked = false;
+
   static final _usernameRule = RegExp(r'^[a-z0-9_]{3,20}$');
 
   @override
   void dispose() {
     _passwordFocus.dispose();
     _guardianEmail.dispose();
+    _usernameDebounce?.cancel();
     super.dispose();
   }
 
@@ -79,6 +87,42 @@ class _SignInScreenState extends State<SignInScreen> {
     if (email != _email.text) _email.text = email;
     if (email.isNotEmpty && !RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
       setState(() => _error = 'Enter a valid email address.');
+    }
+  }
+
+  void _onUsernameChanged(String value) {
+    _usernameDebounce?.cancel();
+    final username = value.trim().toLowerCase();
+    if (username.isEmpty || !_usernameRule.hasMatch(username)) {
+      setState(() {
+        _usernameHelper = null;
+        _usernameBlocked = false;
+      });
+      return;
+    }
+    setState(() => _usernameHelper = 'Checking…');
+    _usernameDebounce = Timer(const Duration(milliseconds: 500), () => _checkUsername(username));
+  }
+
+  Future<void> _checkUsername(String username) async {
+    try {
+      final res = await Api.instance.get('/username-available', {'username': username}) as Map;
+      // The field may have moved on while this was in flight; ignore a stale reply.
+      if (!mounted || _username.text.trim().toLowerCase() != username) return;
+      final available = res['available'] == true;
+      final suggestion = res['suggestion'] as String?;
+      setState(() {
+        _usernameBlocked = !available;
+        _usernameHelper = available
+            ? 'Available'
+            : suggestion != null
+                ? '$username is taken. Try $suggestion.'
+                : "That username isn't available.";
+      });
+    } catch (_) {
+      if (mounted && _username.text.trim().toLowerCase() == username) {
+        setState(() => _usernameHelper = null);
+      }
     }
   }
 
@@ -145,6 +189,9 @@ class _SignInScreenState extends State<SignInScreen> {
     final username = _username.text.trim().toLowerCase();
     if (_mode == _Mode.signUp && username.isNotEmpty && !_usernameRule.hasMatch(username)) {
       return setState(() => _error = 'Usernames are 3–20 letters, numbers or underscores.');
+    }
+    if (_mode == _Mode.signUp && username.isNotEmpty && _usernameBlocked) {
+      return setState(() => _error = _usernameHelper ?? "That username isn't available.");
     }
     if (_mode == _Mode.signUp && _ageBracket == null) {
       return setState(() => _error = 'Select your age range.');
@@ -290,10 +337,12 @@ class _SignInScreenState extends State<SignInScreen> {
                               controller: _username,
                               textInputAction: TextInputAction.next,
                               autofillHints: const [AutofillHints.newUsername],
-                              decoration: const InputDecoration(
+                              decoration: InputDecoration(
                                 labelText: 'Username (optional)',
-                                helperText: 'Letters, numbers and underscores',
+                                helperText: _usernameHelper ?? 'Letters, numbers and underscores',
+                                helperStyle: _usernameBlocked ? TextStyle(color: hc.dangerInk) : null,
                               ),
+                              onChanged: _onUsernameChanged,
                               onSubmitted: (_) => _passwordFocus.requestFocus(),
                             ),
                             const SizedBox(height: HcSpace.s4),
@@ -389,7 +438,8 @@ class _SignInScreenState extends State<SignInScreen> {
                             style: HcButtons.large(),
                             onPressed: _busy ||
                                     lockRemaining != null ||
-                                    (_mode == _Mode.signUp && (!_termsAccepted || _ageBracket == null))
+                                    (_mode == _Mode.signUp &&
+                                        (!_termsAccepted || _ageBracket == null || _usernameBlocked))
                                 ? null
                                 : _submit,
                             child: _busy
