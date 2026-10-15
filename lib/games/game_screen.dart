@@ -203,6 +203,8 @@ class _GameScreenState extends State<GameScreen> {
             actions: g == null
                 ? null
                 : [
+                    ConnectionSignal(connected: c.connected, pingMs: c.pingMs),
+                    const SizedBox(width: HcSpace.s3),
                     PopupMenuButton<String>(
                       onSelected: (choice) {
                         if (choice == 'share') _share(g);

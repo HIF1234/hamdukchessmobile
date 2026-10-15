@@ -1330,3 +1330,36 @@ class EmptyState extends StatelessWidget {
     );
   }
 }
+
+/// Signal bars + "123ms" in an online game's app bar, so a player notices their own
+/// connection is bad before it costs them a move -- not just when the opponent's does.
+class ConnectionSignal extends StatelessWidget {
+  const ConnectionSignal({super.key, required this.connected, required this.pingMs});
+  final bool connected;
+  final int? pingMs;
+
+  @override
+  Widget build(BuildContext context) {
+    final hc = context.hc;
+    final ms = pingMs;
+    if (!connected || ms == null) {
+      return Tooltip(
+        message: 'No connection',
+        child: Icon(Icons.signal_cellular_connected_no_internet_0_bar_rounded, size: 18, color: hc.dangerInk),
+      );
+    }
+    final (icon, color) = switch (ms) {
+      < 150 => (Icons.signal_cellular_alt_rounded, hc.green),
+      < 400 => (Icons.signal_cellular_alt_2_bar_rounded, HcColors.brandGold),
+      _ => (Icons.signal_cellular_alt_1_bar_rounded, hc.dangerInk),
+    };
+    return Tooltip(
+      message: '${ms}ms to the server',
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(icon, size: 18, color: color),
+        const SizedBox(width: 4),
+        Text('${ms}ms', style: HcText.bodySm.copyWith(color: color)),
+      ]),
+    );
+  }
+}

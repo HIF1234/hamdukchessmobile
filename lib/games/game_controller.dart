@@ -44,6 +44,9 @@ class GameController extends ChangeNotifier with WidgetsBindingObserver {
   /// Set once a rematch is accepted; the screen navigates to it.
   String? rematchGameId;
   bool connected = true; // our own Realtime link
+  /// Round-trip time to the server, for the signal-bars indicator; null before the first
+  /// measurement or whenever a ping fails to answer (treated the same as "offline" there).
+  int? pingMs;
   Duration serverOffset = Duration.zero;
   OpponentPresence opponentPresence = OpponentPresence.connected;
   DateTime? opponentAwaySince;
@@ -52,6 +55,7 @@ class GameController extends ChangeNotifier with WidgetsBindingObserver {
   StreamSubscription<List<ConnectivityResult>>? _net;
   Timer? _retry;
   Timer? _tick;
+  Timer? _ping;
   DateTime? _disconnectedAt;
   bool _flagSent = false;
   bool _readySent = false;
@@ -82,6 +86,23 @@ class GameController extends ChangeNotifier with WidgetsBindingObserver {
     });
     // Drives the clocks, the opponent countdown and flagging.
     _tick = Timer.periodic(const Duration(milliseconds: 200), (_) => _onTick());
+    _ping = Timer.periodic(const Duration(seconds: 5), (_) => _measurePing());
+    _measurePing();
+  }
+
+  /// Round trip to the server, for the signal-bars indicator -- this is how a player
+  /// notices their own connection is bad (slow or down), not just the opponent's.
+  Future<void> _measurePing() async {
+    final before = DateTime.now();
+    try {
+      await Api.instance.get('/ping');
+      if (_disposed) return;
+      pingMs = DateTime.now().difference(before).inMilliseconds;
+    } on ApiError {
+      if (_disposed) return;
+      pingMs = null; // no answer: treated the same as "offline" by the indicator
+    }
+    _notify();
   }
 
   // ---------------------------------------------------------------- server state
@@ -377,6 +398,7 @@ class GameController extends ChangeNotifier with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _retry?.cancel();
     _tick?.cancel();
+    _ping?.cancel();
     _net?.cancel();
     ticks.dispose();
     final ch = _channel;
