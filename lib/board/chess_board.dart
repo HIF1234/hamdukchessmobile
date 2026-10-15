@@ -36,6 +36,7 @@ class ChessBoardView extends StatefulWidget {
     this.animate = true,
     this.arrow,
     this.lastMoveSan,
+    this.confirmMoves = false,
   });
 
   final String fen;
@@ -65,6 +66,9 @@ class ChessBoardView extends StatefulWidget {
   /// The last move in SAN (e.g. "Nxe5+"), announced to the screen reader when it changes.
   final String? lastMoveSan;
 
+  /// Require a tick to confirm a move before it's sent; an X returns the piece instead.
+  final bool confirmMoves;
+
   @override
   State<ChessBoardView> createState() => _ChessBoardViewState();
 }
@@ -79,6 +83,10 @@ class _ChessBoardViewState extends State<ChessBoardView> with SingleTickerProvid
   String? _promoFrom;
   String? _promoTo;
   bool _promoByHand = false;
+  String? _confirmFrom;
+  String? _confirmTo;
+  String? _confirmPromotion;
+  bool _confirmByHand = false;
   late final AnimationController _anim = AnimationController(vsync: this, duration: _slide, value: 1);
 
   @override
@@ -89,6 +97,9 @@ class _ChessBoardViewState extends State<ChessBoardView> with SingleTickerProvid
     }
     if (old.fen != widget.fen) {
       _clearSelection();
+      _confirmFrom = null;
+      _confirmTo = null;
+      _confirmPromotion = null;
       // Slide the piece that just moved, unless the player dropped it there by hand.
       if (widget.animate && widget.lastMove != null && widget.lastMove != old.lastMove && !_droppedByHand) {
         _anim.forward(from: 0);
@@ -139,6 +150,7 @@ class _ChessBoardViewState extends State<ChessBoardView> with SingleTickerProvid
   /// otherwise. A square that's already the start of a queued premove can't start another --
   /// the real board hasn't moved yet, so the picker would otherwise show the same piece twice.
   bool _canPick(String square) {
+    if (_confirmFrom != null) return false; // awaiting a tick/X on the pending move
     final piece = _pieces[square];
     if (piece == null) return false;
     if (_myTurn) return widget.onMove != null && piece[0] == _toMove;
@@ -180,13 +192,7 @@ class _ChessBoardViewState extends State<ChessBoardView> with SingleTickerProvid
       setState(_clearSelection);
       return;
     }
-    if (isPromotion) {
-      if (AppSettings.instance.autoQueen) {
-        _droppedByHand = byHand;
-        widget.onMove?.call(from, to, 'q');
-        setState(_clearSelection);
-        return;
-      }
+    if (isPromotion && !AppSettings.instance.autoQueen) {
       setState(() {
         _promoFrom = from;
         _promoTo = to;
@@ -196,21 +202,36 @@ class _ChessBoardViewState extends State<ChessBoardView> with SingleTickerProvid
       });
       return;
     }
+    _finishMove(from, to, isPromotion ? 'q' : null, byHand: byHand);
+  }
+
+  /// A move the player has committed to (picker closed, if there was one): sent straight to
+  /// the server, or held for an explicit tick first when move confirmation is on.
+  void _finishMove(String from, String to, String? promotion, {required bool byHand}) {
+    if (widget.confirmMoves) {
+      setState(() {
+        _confirmFrom = from;
+        _confirmTo = to;
+        _confirmPromotion = promotion;
+        _confirmByHand = byHand;
+        _clearSelection();
+      });
+      return;
+    }
     _droppedByHand = byHand;
-    widget.onMove?.call(from, to, null);
+    widget.onMove?.call(from, to, promotion);
     setState(_clearSelection);
   }
 
   void _choosePromotion(String piece) {
     final from = _promoFrom!;
     final to = _promoTo!;
-    _droppedByHand = _promoByHand;
-    widget.onMove?.call(from, to, piece);
+    final byHand = _promoByHand;
     setState(() {
       _promoFrom = null;
       _promoTo = null;
-      _clearSelection();
     });
+    _finishMove(from, to, piece, byHand: byHand);
   }
 
   void _cancelPromotion() {
@@ -219,6 +240,34 @@ class _ChessBoardViewState extends State<ChessBoardView> with SingleTickerProvid
       _promoTo = null;
       _clearSelection();
     });
+  }
+
+  void _confirmMove() {
+    final from = _confirmFrom!;
+    final to = _confirmTo!;
+    _droppedByHand = _confirmByHand;
+    widget.onMove?.call(from, to, _confirmPromotion);
+    setState(() {
+      _confirmFrom = null;
+      _confirmTo = null;
+      _confirmPromotion = null;
+    });
+  }
+
+  void _cancelMove() {
+    setState(() {
+      _confirmFrom = null;
+      _confirmTo = null;
+      _confirmPromotion = null;
+    });
+  }
+
+  /// The position with the pending confirm-move already applied, for the preview.
+  String? get _confirmPreviewFen {
+    if (_confirmFrom == null) return null;
+    final game = ch.Chess.fromFEN(widget.fen, check_validity: false);
+    final ok = game.move({'from': _confirmFrom, 'to': _confirmTo, 'promotion': _confirmPromotion ?? 'q'});
+    return ok ? game.fen : null;
   }
 
   void _onTap(Offset p, double size) {
@@ -262,7 +311,8 @@ class _ChessBoardViewState extends State<ChessBoardView> with SingleTickerProvid
       child: LayoutBuilder(builder: (context, c) {
         final size = c.maxWidth;
         final sq = size / 8;
-        final pieces = _pieces;
+        final previewFen = _confirmPreviewFen;
+        final pieces = previewFen != null ? _placement(previewFen) : _pieces;
         // The king of the side to move, if it's in check -- for that square's semantics
         // label; the visual check glow isn't built yet, this only feeds the screen reader.
         String? checkedKingSquare;
@@ -271,9 +321,10 @@ class _ChessBoardViewState extends State<ChessBoardView> with SingleTickerProvid
           checkedKingSquare = pieces.entries.firstWhere((e) => e.value == '${toMove}K', orElse: () => const MapEntry('', '')).key;
           if (checkedKingSquare.isEmpty) checkedKingSquare = null;
         }
+        final confirming = _confirmFrom != null;
         return GestureDetector(
-          onTapUp: _promoFrom != null ? null : (d) => _onTap(d.localPosition, size),
-          onPanStart: _promoFrom != null || (widget.onMove == null && widget.onPremove == null)
+          onTapUp: _promoFrom != null || confirming ? null : (d) => _onTap(d.localPosition, size),
+          onPanStart: _promoFrom != null || confirming || (widget.onMove == null && widget.onPremove == null)
               ? null
               : (d) {
                   final s = _squareAt(d.localPosition, size);
@@ -370,6 +421,14 @@ class _ChessBoardViewState extends State<ChessBoardView> with SingleTickerProvid
                 onPick: _choosePromotion,
                 onCancel: _cancelPromotion,
               ),
+            if (_confirmFrom != null && _confirmTo != null)
+              _ConfirmBar(
+                origin: _origin(_confirmTo!, size),
+                squareSize: sq,
+                boardSize: size,
+                onConfirm: _confirmMove,
+                onCancel: _cancelMove,
+              ),
             // Invisible per-square semantics nodes for the screen reader: raw touch isn't
             // affected, since Semantics.onTap only fires from the accessibility bridge.
             for (final square in _allSquares)
@@ -438,6 +497,45 @@ class _PromotionPicker extends StatelessWidget {
             ),
           ),
         ),
+    ]);
+  }
+}
+
+/// A tick/X pair over the destination square, for move confirmation: the piece has already
+/// moved there (the preview); nothing is sent to the server until the tick is pressed.
+class _ConfirmBar extends StatelessWidget {
+  const _ConfirmBar({
+    required this.origin,
+    required this.squareSize,
+    required this.boardSize,
+    required this.onConfirm,
+    required this.onCancel,
+  });
+
+  final Offset origin;
+  final double squareSize;
+  final double boardSize;
+  final VoidCallback onConfirm;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    final hc = context.hc;
+    // Same up/down flip as the promotion picker, so the bar never runs off the board.
+    final down = origin.dy < boardSize / 2;
+    return Stack(children: [
+      GestureDetector(onTap: onCancel, child: Container(width: boardSize, height: boardSize, color: Colors.transparent)),
+      Positioned(
+        left: (origin.dx + squareSize / 2 - squareSize).clamp(0, boardSize - squareSize * 2),
+        top: origin.dy + (down ? squareSize * 1.1 : -squareSize * 1.1),
+        child: DecoratedBox(
+          decoration: BoxDecoration(color: hc.surface, borderRadius: BorderRadius.circular(squareSize), boxShadow: HcShadows.e2(hc.brightness)),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            IconButton(onPressed: onCancel, icon: Icon(Icons.close_rounded, color: hc.danger)),
+            IconButton(onPressed: onConfirm, icon: Icon(Icons.check_rounded, color: hc.green)),
+          ]),
+        ),
+      ),
     ]);
   }
 }

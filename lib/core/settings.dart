@@ -27,8 +27,8 @@ class AppSettings extends ChangeNotifier {
   /// Off by default: no ratings shown during games, for nervous players.
   bool hideRatings = false;
 
-  /// On by default: a tick to confirm each move before it's sent. Games screens default
-  /// this on for daily (correspondence) games regardless of this setting.
+  /// Off by default: a tick to confirm each move before it's sent. GameScreen forces this
+  /// on for daily (correspondence) games regardless of this setting.
   bool moveConfirmation = false;
 
   /// Off by default: pieces hidden, as on the website.

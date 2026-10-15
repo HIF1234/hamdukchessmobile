@@ -34,6 +34,7 @@ class GameState {
     this.timeControl = '',
     this.chess960 = false,
     this.rated = true,
+    this.isCorrespondence = false,
   });
 
   final String id;
@@ -57,6 +58,8 @@ class GameState {
   final String timeControl;
   final bool chess960;
   final bool rated;
+  /// A daily/correspondence game: move confirmation is forced on regardless of the setting.
+  final bool isCorrespondence;
 
   bool get active => status == 'active';
   bool get whiteToMove => fen.split(' ')[1] == 'w';
@@ -106,6 +109,7 @@ class GameState {
         timeControl: j['time_control'] as String? ?? '',
         chess960: j['chess960_start_fen'] != null,
         rated: j['rated'] as bool? ?? true,
+        isCorrespondence: j['is_correspondence'] as bool? ?? false,
       );
 
   /// A Realtime update of the games row. It has no player names, so those are kept.
@@ -130,6 +134,7 @@ class GameState {
         timeControl: timeControl,
         chess960: chess960,
         rated: rated,
+        isCorrespondence: isCorrespondence,
       );
 
   /// All moves in SAN, read from the PGN (for game review).

@@ -115,6 +115,33 @@ void main() {
     expect(cancelled, isTrue);
   });
 
+  testWidgets('move confirmation holds the move until the tick is pressed', (t) async {
+    final moves = <String>[];
+    await pump(t, ChessBoardView(fen: start, playerColor: 'w', onMove: record(moves), confirmMoves: true));
+    await tap(t, 'e2');
+    await tap(t, 'e4');
+    expect(moves, isEmpty); // not sent yet
+    await t.tap(find.byIcon(Icons.check_rounded));
+    await t.pump();
+    expect(moves, ['e2e4']);
+  });
+
+  testWidgets('the X on move confirmation returns the piece without sending the move', (t) async {
+    final moves = <String>[];
+    await pump(t, ChessBoardView(fen: start, playerColor: 'w', onMove: record(moves), confirmMoves: true));
+    await tap(t, 'e2');
+    await tap(t, 'e4');
+    await t.tap(find.byIcon(Icons.close_rounded));
+    await t.pump();
+    expect(moves, isEmpty);
+    // The piece is back on e2 and playable again.
+    await tap(t, 'e2');
+    await tap(t, 'e4');
+    await t.tap(find.byIcon(Icons.check_rounded));
+    await t.pump();
+    expect(moves, ['e2e4']);
+  });
+
   testWidgets('every square has a semantics label for the screen reader', (t) async {
     final handle = t.ensureSemantics();
     final moves = <String>[];
