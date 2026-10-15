@@ -15,6 +15,7 @@ import 'auth/sign_in_screen.dart';
 import 'bots/bot_results.dart';
 import 'core/api.dart';
 import 'core/app_config.dart';
+import 'core/first_move.dart';
 import 'core/force_update_screen.dart';
 import 'core/links.dart';
 import 'core/settings.dart';
@@ -88,6 +89,25 @@ class HamdukChessApp extends StatefulWidget {
 class _HamdukChessAppState extends State<HamdukChessApp> {
   late bool _showOnboarding = widget.showOnboarding;
 
+  /// A brand-new install, having just answered onboarding, goes straight into its first
+  /// move rather than detouring through the sign-in screen -- the same anonymous session
+  /// "Play as guest" creates there, just skipped ahead of. Signed-in/returning devices never
+  /// see onboarding (hasSeenOnboarding), so this never runs for them.
+  Future<void> _onOnboardingDone(OnboardingResult result) async {
+    if (Supabase.instance.client.auth.currentSession == null) {
+      try {
+        await Supabase.instance.client.auth.signInAnonymously(data: {
+          'starting_rating': '${result.startingRating}',
+          'language': AppSettings.instance.language,
+        });
+        PendingFirstMove.set(result.beginner ? FirstMoveIntent.tutorial : FirstMoveIntent.bot);
+      } catch (_) {
+        // Offline, or the request failed: fall through to the ordinary sign-in screen.
+      }
+    }
+    if (mounted) setState(() => _showOnboarding = false);
+  }
+
   @override
   Widget build(BuildContext context) {
     final config = widget.config;
@@ -101,7 +121,7 @@ class _HamdukChessAppState extends State<HamdukChessApp> {
           : config.isBelowMinVersion(widget.appVersion)
               ? const ForceUpdateScreen()
               : _showOnboarding
-                  ? OnboardingScreen(onDone: () => setState(() => _showOnboarding = false))
+                  ? OnboardingScreen(onDone: _onOnboardingDone)
                   : _AuthGate(config: config, appVersion: widget.appVersion),
     );
   }

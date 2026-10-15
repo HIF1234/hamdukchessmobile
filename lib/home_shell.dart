@@ -3,15 +3,20 @@
 // ignore_for_file: experimental_member_use
 import 'dart:async';
 
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 
 import 'auth/passkey_auth.dart';
 import 'bots/bot_game_screen.dart';
 import 'core/active_game.dart';
+import 'core/api.dart';
 import 'core/app_config.dart';
+import 'core/first_move.dart';
 import 'core/hc_widgets.dart';
 import 'core/links.dart';
 import 'core/push.dart';
+import 'core/settings.dart';
 import 'core/storage.dart';
 import 'core/theme.dart';
 import 'core/whats_new.dart';
@@ -19,6 +24,7 @@ import 'games/game_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'games/challenge_screens.dart';
 import 'games/play_screen.dart';
+import 'learn/tutorial_screen.dart';
 import 'profile/profile_screen.dart';
 import 'puzzles/puzzles_screen.dart';
 import 'social/social_screen.dart';
@@ -51,10 +57,65 @@ class _HomeShellState extends State<HomeShell> {
     _gameLinks = IncomingLinks.instance.games.listen(_openGame);
     final pendingGame = IncomingLinks.instance.takePendingGame();
     if (pendingGame != null) WidgetsBinding.instance.addPostFrameCallback((_) => _openGame(pendingGame));
-    Push.start();
+    _maybeStartPush();
     WidgetsBinding.instance.addPostFrameCallback((_) => _maybePromptPasskey());
     WidgetsBinding.instance.addPostFrameCallback((_) => _maybeResumeGame());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeStartFirstMove());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeOfferLowData());
     WidgetsBinding.instance.addPostFrameCallback((_) => maybeShowWhatsNew(context, widget.appVersion));
+  }
+
+  /// Registers this phone for push right away only if notification permission was already
+  /// decided (granted or denied) before -- an existing player, or one who has already been
+  /// through the in-game prompt below. A brand-new install waits for NotificationPrompt to
+  /// ask with its one-line reason, right after the first finished game, not at launch.
+  Future<void> _maybeStartPush() async {
+    final settings = await FirebaseMessaging.instance.getNotificationSettings();
+    if (settings.authorizationStatus != AuthorizationStatus.notDetermined) Push.start();
+  }
+
+  /// Onboarding just created this guest's session and decided what their first move should
+  /// be (PendingFirstMove) -- open it now, once.
+  Future<void> _maybeStartFirstMove() async {
+    final intent = PendingFirstMove.take();
+    if (intent == null || !mounted) return;
+    switch (intent) {
+      case FirstMoveIntent.tutorial:
+        try {
+          final tutorial = await Api.instance.get('/tutorials/how-pieces-move') as Map<String, dynamic>;
+          if (mounted) Navigator.of(context).push(MaterialPageRoute(builder: (_) => TutorialScreen(tutorial: tutorial)));
+        } on ApiError {
+          // Offline; they'll find it in Learn once connected.
+        }
+      case FirstMoveIntent.bot:
+        final matches = widget.config.bots.where((b) => b['id'] == 'army_legend');
+        if (matches.isEmpty || !mounted) return;
+        Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => BotGameScreen(bot: matches.first, playWhite: true, autoHint: true),
+        ));
+    }
+  }
+
+  /// "You're on mobile data. Use less data?" -- asked at most once per install.
+  Future<void> _maybeOfferLowData() async {
+    if (AppSettings.instance.lowData) return;
+    final store = await JsonStore.open();
+    if (await store.read('mobile_data_prompt_asked') == true) return;
+    await store.write('mobile_data_prompt_asked', true);
+    final result = await Connectivity().checkConnectivity();
+    if (!result.contains(ConnectivityResult.mobile) || !mounted) return;
+    final use = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("You're on mobile data."),
+        content: const Text('Use less data? Turns off pictures and animations -- you can change this any time in Settings.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Not now')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Use less data')),
+        ],
+      ),
+    );
+    if (use == true) await AppSettings.instance.setLowData(true);
   }
 
   /// If the app closed mid-game last time, reopen it now: online games reconnect through

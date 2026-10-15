@@ -12,17 +12,43 @@ class AppSettings extends ChangeNotifier {
   /// Low-data mode (spec §4): no avatars or other pictures, no animations.
   bool lowData = false;
 
+  /// One of [appLanguages]' codes. Chosen at onboarding, changeable in Settings. Every
+  /// language currently renders in English -- there's no translated copy yet -- so this is
+  /// just the stored preference, ready for when real translations exist.
+  String language = 'en';
+
   Future<void> load() async {
     final j = await (await JsonStore.open()).read(_key);
-    if (j is Map) lowData = j['lowData'] == true;
+    if (j is Map) {
+      lowData = j['lowData'] == true;
+      language = j['language'] as String? ?? 'en';
+    }
   }
 
   Future<void> setLowData(bool v) async {
     lowData = v;
     notifyListeners();
-    await (await JsonStore.open()).write(_key, {'lowData': lowData});
+    await _save();
   }
+
+  Future<void> setLanguage(String v) async {
+    language = v;
+    notifyListeners();
+    await _save();
+  }
+
+  Future<void> _save() => (JsonStore.open()).then((s) => s.write(_key, {'lowData': lowData, 'language': language}));
 }
+
+/// Onboarding's "first question" and Settings > Language. Every option renders in English
+/// today; see [AppSettings.language].
+const appLanguages = {
+  'en': 'English',
+  'pcm': 'Pidgin',
+  'yo': 'Yoruba',
+  'ha': 'Hausa',
+  'ig': 'Igbo',
+};
 
 /// Counts the app's own API traffic this session (spec §4: measure MB per session).
 /// Realtime traffic isn't included; it's small by comparison (one row per move).

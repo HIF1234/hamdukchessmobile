@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../core/hc_widgets.dart';
+import '../core/settings.dart';
 import '../core/storage.dart';
+import '../core/theme.dart';
 
 class _Slide {
   const _Slide(this.icon, this.title, this.body);
@@ -20,16 +23,15 @@ const _slides = [
     'Play online or offline',
     'Match with real opponents worldwide, challenge a friend on WhatsApp, or play Naija bots with zero data used.',
   ),
-  _Slide(
-    Icons.extension,
-    'Train with puzzles',
-    'Rated tactics puzzles download once and work with no connection — solve on the go, sync when you\'re back online.',
-  ),
-  _Slide(
-    Icons.bolt,
-    'Built to be quick',
-    'Moves land in a fraction of a second, and puzzle packs stay light on data and on older phones.',
-  ),
+];
+
+/// "How well do you play?" sets the starting rating (and whether the first game is a bot
+/// match or the "how pieces move" tutorial first) -- see PendingFirstMove.
+const _levels = [
+  ('New to chess', 400, true),
+  ('I know the moves', 800, false),
+  ('Club player', 1200, false),
+  ('Tournament player', 1600, false),
 ];
 
 const _onboardingSeenKey = 'onboarding_seen';
@@ -39,31 +41,46 @@ Future<bool> hasSeenOnboarding() async {
   return (await store.read(_onboardingSeenKey)) == true;
 }
 
+/// What onboarding collected, for the caller to act on (seed a guest sign-in, route the
+/// first move) once the flow finishes.
+class OnboardingResult {
+  const OnboardingResult({required this.startingRating, required this.beginner});
+  final int startingRating;
+  final bool beginner;
+}
+
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key, required this.onDone});
-  final VoidCallback onDone;
+  final void Function(OnboardingResult result) onDone;
 
   @override
   State<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
+enum _Step { language, slides, level }
+
 class _OnboardingScreenState extends State<OnboardingScreen> {
   final _controller = PageController();
-  int _page = 0;
+  _Step _step = _Step.language;
+  int _slide = 0;
 
-  Future<void> _finish() async {
+  Future<void> _finish(int startingRating, bool beginner) async {
     final store = await JsonStore.open();
     await store.write(_onboardingSeenKey, true);
-    widget.onDone();
+    widget.onDone(OnboardingResult(startingRating: startingRating, beginner: beginner));
   }
 
-  void _next() {
-    if (_page == _slides.length - 1) {
-      _finish();
+  void _afterLanguage() => setState(() => _step = _Step.slides);
+
+  void _nextSlide() {
+    if (_slide == _slides.length - 1) {
+      setState(() => _step = _Step.level);
     } else {
       _controller.nextPage(duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
     }
   }
+
+  void _skipSlides() => setState(() => _step = _Step.level);
 
   @override
   void dispose() {
@@ -73,64 +90,124 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context);
-    final last = _page == _slides.length - 1;
     return Scaffold(
+      backgroundColor: HcColors.forest,
       body: SafeArea(
         child: Column(
           children: [
-            Align(
-              alignment: Alignment.topRight,
-              child: Padding(
-                padding: const EdgeInsets.only(right: 8, top: 4),
-                child: TextButton(
-                  onPressed: last ? null : _finish,
-                  child: Text(last ? '' : 'Skip'),
-                ),
-              ),
-            ),
+            const AsoOkeStrip(),
+            const SizedBox(height: HcSpace.s4),
+            Text('Hamduk Chess', style: HcText.displayMd.copyWith(color: HcColors.onForest)),
+            const SizedBox(height: HcSpace.s5),
             Expanded(
-              child: PageView(
-                controller: _controller,
-                onPageChanged: (i) => setState(() => _page = i),
-                children: [for (final s in _slides) _SlideView(slide: s)],
-              ),
+              child: switch (_step) {
+                _Step.language => _LanguageStep(onNext: _afterLanguage),
+                _Step.slides => _SlidesStep(controller: _controller, slide: _slide, onChanged: (i) => setState(() => _slide = i)),
+                _Step.level => _LevelStep(onPicked: _finish),
+              },
             ),
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  for (var i = 0; i < _slides.length; i++)
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      margin: const EdgeInsets.symmetric(horizontal: 3),
-                      width: i == _page ? 20 : 6,
-                      height: 6,
-                      decoration: BoxDecoration(
-                        color: i == _page ? t.colorScheme.primary : t.colorScheme.outlineVariant,
-                        borderRadius: BorderRadius.circular(3),
+            if (_step == _Step.slides) ...[
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: HcSpace.s4),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    for (var i = 0; i < _slides.length; i++)
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        margin: const EdgeInsets.symmetric(horizontal: 3),
+                        width: i == _slide ? 20 : 6,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          color: i == _slide ? HcColors.brandGold : HcColors.onForest2,
+                          borderRadius: BorderRadius.circular(3),
+                        ),
                       ),
-                    ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-              child: SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: _next,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    child: Text(last ? 'Get started' : 'Next'),
-                  ),
+                  ],
                 ),
               ),
-            ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(HcSpace.s6, 0, HcSpace.s6, HcSpace.s6),
+                child: Row(children: [
+                  TextButton(onPressed: _skipSlides, child: const Text('Skip', style: TextStyle(color: HcColors.onForest2))),
+                  const Spacer(),
+                  FilledButton(style: HcButtons.large(), onPressed: _nextSlide, child: const Text('Next')),
+                ]),
+              ),
+            ],
           ],
         ),
       ),
+    );
+  }
+}
+
+class _LanguageStep extends StatefulWidget {
+  const _LanguageStep({required this.onNext});
+  final VoidCallback onNext;
+
+  @override
+  State<_LanguageStep> createState() => _LanguageStepState();
+}
+
+class _LanguageStepState extends State<_LanguageStep> {
+  String _chosen = 'en';
+
+  Future<void> _pick(String code) async {
+    setState(() => _chosen = code);
+    await AppSettings.instance.setLanguage(code);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hc = context.hc;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: HcSpace.s6),
+      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Text('Choose your language', style: HcText.displayMd.copyWith(color: HcColors.onForest), textAlign: TextAlign.center),
+        const SizedBox(height: HcSpace.s2),
+        Text('Changeable any time in Settings.', style: HcText.body.copyWith(color: HcColors.onForest2), textAlign: TextAlign.center),
+        const SizedBox(height: HcSpace.s6),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(HcSpace.s3),
+          decoration: BoxDecoration(color: hc.surface, borderRadius: BorderRadius.circular(HcRadius.xl)),
+          child: Material(
+            type: MaterialType.transparency,
+            child: Column(
+              children: [
+                for (final entry in appLanguages.entries)
+                  ListTile(
+                    title: Text(entry.value, style: HcText.titleMd.copyWith(color: hc.ink)),
+                    trailing: entry.key == _chosen ? Icon(Icons.check_rounded, color: hc.green) : null,
+                    onTap: () => _pick(entry.key),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: HcSpace.s5),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton(style: HcButtons.large(), onPressed: widget.onNext, child: const Text('Continue')),
+        ),
+      ]),
+    );
+  }
+}
+
+class _SlidesStep extends StatelessWidget {
+  const _SlidesStep({required this.controller, required this.slide, required this.onChanged});
+  final PageController controller;
+  final int slide;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return PageView(
+      controller: controller,
+      onPageChanged: onChanged,
+      children: [for (final s in _slides) _SlideView(slide: s)],
     );
   }
 }
@@ -141,31 +218,58 @@ class _SlideView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 32),
+      padding: const EdgeInsets.symmetric(horizontal: HcSpace.s7),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
             width: 120,
             height: 120,
-            decoration: BoxDecoration(
-              color: t.colorScheme.primaryContainer,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(slide.icon, size: 56, color: t.colorScheme.onPrimaryContainer),
+            decoration: const BoxDecoration(color: HcColors.brandGold, shape: BoxShape.circle),
+            child: Icon(slide.icon, size: 56, color: HcColors.forest),
           ),
-          const SizedBox(height: 32),
-          Text(slide.title, style: t.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold), textAlign: TextAlign.center),
-          const SizedBox(height: 12),
-          Text(
-            slide.body,
-            style: t.textTheme.bodyLarge?.copyWith(color: t.colorScheme.onSurfaceVariant),
-            textAlign: TextAlign.center,
-          ),
+          const SizedBox(height: HcSpace.s7),
+          Text(slide.title, style: HcText.displayMd.copyWith(color: HcColors.onForest), textAlign: TextAlign.center),
+          const SizedBox(height: HcSpace.s3),
+          Text(slide.body, style: HcText.body.copyWith(color: HcColors.onForest2), textAlign: TextAlign.center),
         ],
       ),
+    );
+  }
+}
+
+class _LevelStep extends StatelessWidget {
+  const _LevelStep({required this.onPicked});
+  final void Function(int startingRating, bool beginner) onPicked;
+
+  @override
+  Widget build(BuildContext context) {
+    final hc = context.hc;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: HcSpace.s6),
+      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Text('How well do you play?', style: HcText.displayMd.copyWith(color: HcColors.onForest), textAlign: TextAlign.center),
+        const SizedBox(height: HcSpace.s2),
+        Text('This sets where you start -- you can always prove it wrong.', style: HcText.body.copyWith(color: HcColors.onForest2), textAlign: TextAlign.center),
+        const SizedBox(height: HcSpace.s6),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(HcSpace.s3),
+          decoration: BoxDecoration(color: hc.surface, borderRadius: BorderRadius.circular(HcRadius.xl)),
+          child: Material(
+            type: MaterialType.transparency,
+            child: Column(children: [
+              for (final (label, rating, beginner) in _levels)
+                ListTile(
+                  title: Text(label, style: HcText.titleMd.copyWith(color: hc.ink)),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => onPicked(rating, beginner),
+                ),
+            ]),
+          ),
+        ),
+      ]),
     );
   }
 }

@@ -162,6 +162,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     trailing: Switch(value: AppSettings.instance.lowData, onChanged: AppSettings.instance.setLowData),
                   ),
                 ),
+                ListenableBuilder(
+                  listenable: AppSettings.instance,
+                  builder: (context, _) => HcListRow(
+                    title: 'Language',
+                    subtitle: appLanguages[AppSettings.instance.language] ?? 'English',
+                    onTap: () => _editLanguage(context),
+                  ),
+                ),
                 if (Supabase.instance.client.auth.currentUser?.isAnonymous == false) ...[
                   HcListRow(
                     title: 'Location',
@@ -208,6 +216,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _editLanguage(BuildContext context) async {
+    final current = AppSettings.instance.language;
+    final chosen = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            for (final entry in appLanguages.entries)
+              ListTile(
+                title: Text(entry.value),
+                trailing: entry.key == current ? const Icon(Icons.check_rounded) : null,
+                onTap: () => Navigator.pop(ctx, entry.key),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (chosen == null || chosen == current) return;
+    await AppSettings.instance.setLanguage(chosen);
+    if (Supabase.instance.client.auth.currentUser?.isAnonymous == false) {
+      try {
+        await Api.instance.patch('/account', {'language': chosen});
+      } on ApiError {
+        // Best-effort; the device-local preference above is what actually matters today.
+      }
+    }
   }
 
   Future<void> _editState(BuildContext context) async {

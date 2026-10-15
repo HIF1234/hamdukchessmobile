@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../auth/guest_conversion.dart';
 import '../board/chess_board.dart';
+import '../core/notification_prompt.dart';
 import '../core/settings.dart';
 import 'local_network.dart';
 
@@ -143,8 +144,10 @@ class _LocalGameScreenState extends State<LocalGameScreen> {
       };
     });
     widget.sendResult(result);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) GuestConversion.gameFinished(context);
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      await GuestConversion.gameFinished(context);
+      if (mounted) await NotificationPrompt.gameFinished(context);
     });
   }
 

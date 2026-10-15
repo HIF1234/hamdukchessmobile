@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../auth/guest_conversion.dart';
 import '../board/chess_board.dart';
 import '../core/hc_widgets.dart';
+import '../core/notification_prompt.dart';
 import '../core/settings.dart';
 import '../core/telemetry.dart';
 import '../core/theme.dart';
@@ -19,11 +20,14 @@ import 'bot_results.dart';
 /// A game against one of the Naija bots, played entirely on the phone. Stockfish runs as a
 /// separate program; no connection needed.
 class BotGameScreen extends StatefulWidget {
-  const BotGameScreen({super.key, required this.bot, required this.playWhite, this.initialSanMoves});
+  const BotGameScreen({super.key, required this.bot, required this.playWhite, this.initialSanMoves, this.autoHint = false});
   final Map<String, dynamic> bot;
   final bool playWhite;
   /// When resuming a game the app closed mid-way through (see [ActiveGame]).
   final List<String>? initialSanMoves;
+  /// Shows a hint arrow as soon as the engine is ready, unprompted -- for a brand-new
+  /// player's very first move, right after onboarding.
+  final bool autoHint;
 
   @override
   State<BotGameScreen> createState() => _BotGameScreenState();
@@ -70,7 +74,11 @@ class _BotGameScreenState extends State<BotGameScreen> {
   Future<void> _startEngine() async {
     try {
       _engine = await UciEngine.start(await Device.stockfishPath());
-      if (_result == null && (_game.turn == ch.Color.WHITE) != widget.playWhite) _botMove();
+      if (_result == null && (_game.turn == ch.Color.WHITE) != widget.playWhite) {
+        _botMove();
+      } else if (widget.autoHint && _ply == 0) {
+        _showHint();
+      }
     } catch (e, st) {
       Telemetry.recordError(e, st, reason: 'engine start');
       setState(() => _engineError = "The bot engine couldn't start on this phone.");
@@ -286,7 +294,9 @@ class _BotGameScreenState extends State<BotGameScreen> {
         );
       },
     );
-    if (mounted) await GuestConversion.gameFinished(context);
+    if (!mounted) return;
+    await GuestConversion.gameFinished(context);
+    if (mounted) await NotificationPrompt.gameFinished(context);
   }
 
   @override
