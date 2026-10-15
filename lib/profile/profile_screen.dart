@@ -173,6 +173,54 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     onTap: () => _editLanguage(context),
                   ),
                 ),
+                ListenableBuilder(
+                  listenable: AppSettings.instance,
+                  builder: (context, _) => HcListRow(
+                    title: 'Sound',
+                    subtitle: 'Move, capture, check and other game sounds',
+                    trailing: Switch(value: AppSettings.instance.sound, onChanged: AppSettings.instance.setSound),
+                  ),
+                ),
+                ListenableBuilder(
+                  listenable: AppSettings.instance,
+                  builder: (context, _) => HcListRow(
+                    title: 'Vibration',
+                    subtitle: 'A tap on each move, stronger on captures and check',
+                    trailing: Switch(value: AppSettings.instance.vibration, onChanged: AppSettings.instance.setVibration),
+                  ),
+                ),
+                ListenableBuilder(
+                  listenable: AppSettings.instance,
+                  builder: (context, _) => HcListRow(
+                    title: 'Auto-queen',
+                    subtitle: 'Skip the promotion picker; premoves already do this',
+                    trailing: Switch(value: AppSettings.instance.autoQueen, onChanged: AppSettings.instance.setAutoQueen),
+                  ),
+                ),
+                ListenableBuilder(
+                  listenable: AppSettings.instance,
+                  builder: (context, _) => HcListRow(
+                    title: 'Move confirmation',
+                    subtitle: 'A tick to confirm each move. Always on for daily games',
+                    trailing: Switch(value: AppSettings.instance.moveConfirmation, onChanged: AppSettings.instance.setMoveConfirmation),
+                  ),
+                ),
+                ListenableBuilder(
+                  listenable: AppSettings.instance,
+                  builder: (context, _) => HcListRow(
+                    title: 'Hide ratings during games',
+                    subtitle: 'For nervous players',
+                    trailing: Switch(value: AppSettings.instance.hideRatings, onChanged: AppSettings.instance.setHideRatings),
+                  ),
+                ),
+                ListenableBuilder(
+                  listenable: AppSettings.instance,
+                  builder: (context, _) => HcListRow(
+                    title: 'Blindfold',
+                    subtitle: 'Hide the pieces, as on the website',
+                    trailing: Switch(value: AppSettings.instance.blindfold, onChanged: AppSettings.instance.setBlindfold),
+                  ),
+                ),
                 if (Supabase.instance.client.auth.currentUser?.isAnonymous == false) ...[
                   HcListRow(
                     title: 'Location',

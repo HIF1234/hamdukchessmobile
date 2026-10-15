@@ -2,6 +2,7 @@ import 'package:chess/chess.dart' as ch;
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import '../core/settings.dart';
 import '../core/theme.dart';
 
 const _slide = Duration(milliseconds: 120);
@@ -163,6 +164,12 @@ class _ChessBoardViewState extends State<ChessBoardView> with SingleTickerProvid
       return;
     }
     if (isPromotion) {
+      if (AppSettings.instance.autoQueen) {
+        _droppedByHand = byHand;
+        widget.onMove?.call(from, to, 'q');
+        setState(_clearSelection);
+        return;
+      }
       setState(() {
         _promoFrom = from;
         _promoTo = to;
@@ -279,7 +286,7 @@ class _ChessBoardViewState extends State<ChessBoardView> with SingleTickerProvid
                           Curves.easeOut.transform(_anim.value))!;
                       return Positioned(left: at.dx, top: at.dy, width: sq, height: sq, child: child!);
                     },
-                    child: IgnorePointer(child: _PieceImage(e.value)),
+                    child: IgnorePointer(child: _PieceImage(e.value, blind: AppSettings.instance.blindfold)),
                   )
                 else
                   Positioned(
@@ -287,7 +294,7 @@ class _ChessBoardViewState extends State<ChessBoardView> with SingleTickerProvid
                     top: _origin(e.key, size).dy,
                     width: sq,
                     height: sq,
-                    child: IgnorePointer(child: _PieceImage(e.value)),
+                    child: IgnorePointer(child: _PieceImage(e.value, blind: AppSettings.instance.blindfold)),
                   ),
             if (_dragFrom != null && _dragPos != null && pieces[_dragFrom] != null)
               Positioned(
@@ -296,7 +303,7 @@ class _ChessBoardViewState extends State<ChessBoardView> with SingleTickerProvid
                 top: _dragPos!.dy - sq * 1.1,
                 width: sq * 1.2,
                 height: sq * 1.2,
-                child: IgnorePointer(child: _PieceImage(pieces[_dragFrom]!)),
+                child: IgnorePointer(child: _PieceImage(pieces[_dragFrom]!, blind: AppSettings.instance.blindfold)),
               ),
             if (widget.arrow != null)
               IgnorePointer(
@@ -381,11 +388,15 @@ class _PromotionPicker extends StatelessWidget {
 }
 
 class _PieceImage extends StatelessWidget {
-  const _PieceImage(this.code);
+  const _PieceImage(this.code, {this.blind = false});
   final String code; // e.g. wN
 
+  /// Hides the piece (blindfold mode) -- never set on the promotion picker, which the
+  /// player needs to actually see to choose a piece.
+  final bool blind;
+
   @override
-  Widget build(BuildContext context) => SvgPicture.asset('assets/pieces/$code.svg');
+  Widget build(BuildContext context) => blind ? const SizedBox.shrink() : SvgPicture.asset('assets/pieces/$code.svg');
 }
 
 class _SquaresPainter extends CustomPainter {
