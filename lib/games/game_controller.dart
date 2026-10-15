@@ -361,6 +361,13 @@ class GameController extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> answerDraw(bool accept) => _action('/games/$gameId/draw', {'accept': accept});
   Future<void> abort() => _action('/games/$gameId/abort');
   Future<void> requestTakeback() => _action('/games/$gameId/takeback');
+
+  /// "Say move aloud": sends a short recording (base64) for transcription. Throws
+  /// [ApiError] on failure; doesn't touch [game] or [pending] itself.
+  Future<String> transcribeVoiceMove(String base64Audio) async {
+    final r = await Api.instance.post('/voice/transcribe', {'audio': base64Audio}) as Map;
+    return r['text'] as String? ?? '';
+  }
   Future<void> answerTakeback(bool accept) => _action('/games/$gameId/takeback', {'accept': accept});
 
   /// Offers a rematch, or accepts the opponent's pending offer, swapping colours either way.

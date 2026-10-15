@@ -3,6 +3,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../board/chess_board.dart';
 import '../core/active_game.dart';
+import '../core/app_config.dart';
 import '../core/hc_widgets.dart';
 import '../core/keep_screen_on.dart';
 import '../core/notification_prompt.dart';
@@ -13,6 +14,7 @@ import '../review/review_screen.dart';
 import '../social/conversation_screen.dart';
 import 'game_controller.dart';
 import 'game_state.dart';
+import 'voice_move_sheet.dart';
 
 String _categoryName(String category) => category.isEmpty ? '' : '${category[0].toUpperCase()}${category.substring(1)}';
 
@@ -86,6 +88,14 @@ class _GameScreenState extends State<GameScreen> {
       ),
     );
     if (ok == true) await c.resign();
+  }
+
+  Future<void> _sayMove(GameController c) async {
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => VoiceMoveSheet(controller: c),
+    );
   }
 
   Future<void> _confirmAbort() async {
@@ -491,6 +501,8 @@ class _GameScreenState extends State<GameScreen> {
                     ? null
                     : () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ConversationScreen(username: opp.username))),
               ),
+              if (AppConfig.current?.feature('voiceMove') ?? true)
+                GameAction(icon: Icons.mic_rounded, label: 'Say move', onTap: () => _sayMove(c)),
             ]);
           }
           if (!c.isParticipant) {

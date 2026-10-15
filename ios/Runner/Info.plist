@@ -30,6 +30,8 @@
 		<string>Hamduk Chess connects to other players' phones on the same WiFi hotspot to run data-free local tournaments.</string>
 		<key>NSCameraUsageDescription</key>
 		<string>Hamduk Chess uses the camera to scan a host's QR code to join a local tournament.</string>
+		<key>NSMicrophoneUsageDescription</key>
+		<string>Hamduk Chess uses the microphone so you can say your move aloud instead of tapping the board.</string>
 		<key>UIApplicationSceneManifest</key>
 		<dict>
 			<key>UIApplicationSupportsMultipleScenes</key>
