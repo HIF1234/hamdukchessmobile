@@ -20,9 +20,11 @@ import '../profile/subscription_sheet.dart';
 import '../puzzles/daily_puzzle_screen.dart';
 import '../tournaments/tournaments_screen.dart';
 import 'challenge_screens.dart';
+import 'correspondence_screen.dart';
 import 'game_history_screen.dart';
 import 'game_screen.dart';
 import 'game_state.dart';
+import 'open_challenges_screen.dart';
 import 'spectate_screen.dart';
 
 String _categoryName(String category) => category.isEmpty
@@ -68,6 +70,14 @@ class _PlayScreenState extends State<PlayScreen> {
   String _lastTimeControl =
       '10+0'; // Quick game defaults to 10+0 on first launch
   int _unread = 0;
+  bool _rated = true; // quick-play rated/casual switch
+  String _variant = 'standard'; // Chess960 switch, Plus members only
+  int _ratingWindow = 50; // widens 50 -> 100 -> 200 -> 400 -> 1000 ("anyone") while waiting
+  bool _botOffered = false; // "Play Agbero while you wait?" shown at most once per search
+  int _elapsedSec = 0;
+  Timer? _tick;
+  Map<String, int> _looking = const {}; // live counts: time control -> players searching
+  int _playingNow = 0;
 
   List<GameState>? _activeGames; // online games in progress, your-move first
   ActiveGame? _pendingBot; // a bot game left mid-way, if any
@@ -87,6 +97,7 @@ class _PlayScreenState extends State<PlayScreen> {
     _loadDaily();
     _loadFriendsOnline();
     _loadTournament();
+    _loadLiveCounts();
     Device.isLowMemory()
         .then((v) {
           if (mounted) setState(() => _lowMemory = v);
@@ -184,19 +195,34 @@ class _PlayScreenState extends State<PlayScreen> {
     }
   }
 
+  /// "214 playing, 37 looking for 5 min" above the time-control tiles.
+  Future<void> _loadLiveCounts() async {
+    try {
+      final r = await Api.instance.get('/stats/live') as Map<String, dynamic>;
+      final looking = (r['looking'] as Map).cast<String, dynamic>();
+      if (mounted) {
+        setState(() {
+          _playingNow = (r['playing'] as num?)?.toInt() ?? 0;
+          _looking = looking.map((k, v) => MapEntry(k, (v as num).toInt()));
+        });
+      }
+    } catch (_) {
+      // Offline or failed: the line above the tiles just doesn't show.
+    }
+  }
+
+  /// "Tunde challenges you to 5 min": a push notification, not a shared link -- the friend
+  /// gets Accept/Decline (ChallengeAcceptScreen) and it expires in 10 minutes.
   Future<void> _challengeOnlineFriend(Map<String, dynamic> friend) async {
     try {
       final r = await Api.instance.post('/challenges', {
         'timeControl': _lastTimeControl,
         'color': 'random',
         'rated': false,
+        'targetUserId': friend['userId'],
       }) as Map;
       final id = r['id'] as String;
       final url = r['url'] as String;
-      await Api.instance.post('/social/messages/send', {
-        'recipientId': friend['userId'],
-        'content': shareText(_lastTimeControl, url),
-      });
       if (!mounted) return;
       await Navigator.of(context).push(
         MaterialPageRoute(
@@ -204,6 +230,7 @@ class _PlayScreenState extends State<PlayScreen> {
             challengeId: id,
             url: url,
             timeControl: _lastTimeControl,
+            targetUsername: friend['username'] as String?,
           ),
         ),
       );
@@ -259,6 +286,7 @@ class _PlayScreenState extends State<PlayScreen> {
             as String;
     var colour = 'random';
     var rated = false;
+    var variant = 'standard';
     final go = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -285,6 +313,13 @@ class _PlayScreenState extends State<PlayScreen> {
                         selected: tc == t['id'],
                         onSelected: (_) => set(() => tc = t['id'] as String),
                       ),
+                    ActionChip(
+                      label: const Text('Custom…'),
+                      onPressed: () async {
+                        final custom = await _pickCustomTimeControl(ctx);
+                        if (custom != null) set(() => tc = custom);
+                      },
+                    ),
                   ],
                 ),
                 const SizedBox(height: 12),
@@ -303,6 +338,13 @@ class _PlayScreenState extends State<PlayScreen> {
                   value: rated,
                   onChanged: (v) => set(() => rated = v),
                 ),
+                if (_tier != 'free')
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Chess960'),
+                    value: variant == 'chess960',
+                    onChanged: (v) => set(() => variant = v ? 'chess960' : 'standard'),
+                  ),
                 FilledButton.icon(
                   onPressed: () => Navigator.pop(ctx, true),
                   icon: const Icon(Icons.share),
@@ -320,8 +362,65 @@ class _PlayScreenState extends State<PlayScreen> {
         timeControl: tc,
         color: colour,
         rated: rated,
+        variant: variant,
       );
     }
+  }
+
+  /// 1-60 minutes, 0-30 seconds a move -- posted as an open challenge (the custom time
+  /// control isn't one quick play can match on, only a challenge link).
+  Future<String?> _pickCustomTimeControl(BuildContext context) async {
+    var minutes = 10;
+    var seconds = 0;
+    return showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, set) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text('Custom time control', style: Theme.of(ctx).textTheme.titleLarge),
+                const SizedBox(height: 12),
+                Row(children: [
+                  Expanded(
+                    child: Column(children: [
+                      Text('$minutes min'),
+                      Slider(
+                        value: minutes.toDouble(),
+                        min: 1,
+                        max: 60,
+                        divisions: 59,
+                        onChanged: (v) => set(() => minutes = v.round()),
+                      ),
+                    ]),
+                  ),
+                  Expanded(
+                    child: Column(children: [
+                      Text('+$seconds sec'),
+                      Slider(
+                        value: seconds.toDouble(),
+                        min: 0,
+                        max: 30,
+                        divisions: 30,
+                        onChanged: (v) => set(() => seconds = v.round()),
+                      ),
+                    ]),
+                  ),
+                ]),
+                FilledButton(
+                  onPressed: () => Navigator.pop(ctx, '$minutes+$seconds'),
+                  child: const Text('Use this time control'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _playBot(Map<String, dynamic> bot) async {
@@ -443,6 +542,9 @@ class _PlayScreenState extends State<PlayScreen> {
       _since = DateTime.now();
       _error = null;
       _lastTimeControl = tc;
+      _ratingWindow = 50;
+      _botOffered = false;
+      _elapsedSec = 0;
     });
     JsonStore.open().then((store) => store.write('last_time_control', tc));
     _listenForGame();
@@ -451,7 +553,22 @@ class _PlayScreenState extends State<PlayScreen> {
       if (DateTime.now().difference(_since!) > _giveUp) {
         await _cancel(message: 'No opponent found yet. Try again in a moment.');
       } else {
+        // Widens as it waits: 50 -> 100 -> 200 -> 400 -> 1000 ("anyone").
+        _ratingWindow = switch (_ratingWindow) {
+          50 => 100,
+          100 => 200,
+          200 => 400,
+          _ => 1000,
+        };
         await _ask();
+      }
+    });
+    _tick = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted || _seeking == null) return;
+      setState(() => _elapsedSec++);
+      if (_elapsedSec >= 30 && !_botOffered) {
+        _botOffered = true;
+        _offerBotWhileWaiting();
       }
     });
   }
@@ -460,12 +577,41 @@ class _PlayScreenState extends State<PlayScreen> {
     final tc = _seeking;
     if (tc == null) return;
     try {
-      final r = await Api.instance.post('/seek', {'timeControl': tc}) as Map;
+      final r = await Api.instance.post('/seek', {
+        'timeControl': tc,
+        'rated': _rated,
+        'ratingWindow': _ratingWindow,
+        'variant': _variant,
+      }) as Map;
       final id = r['gameId'] as String?;
       if (id != null) _open(id);
     } on ApiError catch (e) {
       if (!e.isNetwork) await _cancel(message: e.message);
       // On a network blip keep waiting; the next poll tries again.
+    }
+  }
+
+  /// "Nobody free at your level yet. Play Agbero while you wait?" -- the search carries on
+  /// in the background and still opens the real game the moment one is found.
+  Future<void> _offerBotWhileWaiting() async {
+    final matches = widget.config.bots.where((b) => b['id'] == 'agbero');
+    if (matches.isEmpty || !mounted) return;
+    final play = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Nobody free at your level yet.'),
+        content: const Text('Play Agbero while you wait? We keep looking for a real opponent.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Keep waiting')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Play Agbero')),
+        ],
+      ),
+    );
+    if (play == true && mounted) {
+      final playWhite = DateTime.now().millisecond.isEven;
+      await Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => BotGameScreen(bot: matches.first, playWhite: playWhite),
+      ));
     }
   }
 
@@ -503,6 +649,8 @@ class _PlayScreenState extends State<PlayScreen> {
   Future<void> _stopWaiting() async {
     _timer?.cancel();
     _timer = null;
+    _tick?.cancel();
+    _tick = null;
     final ch = _channel;
     _channel = null;
     if (ch != null) await Supabase.instance.client.removeChannel(ch);
@@ -539,6 +687,7 @@ class _PlayScreenState extends State<PlayScreen> {
   @override
   void dispose() {
     _timer?.cancel();
+    _tick?.cancel();
     _seekRequests?.cancel();
     final ch = _channel;
     if (ch != null) Supabase.instance.client.removeChannel(ch);
@@ -625,7 +774,13 @@ class _PlayScreenState extends State<PlayScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  HeroCard.overline('Quick game'),
+                  Row(children: [
+                    Expanded(child: HeroCard.overline('Quick game')),
+                    GestureDetector(
+                      onTap: _seeking == null ? () => setState(() => _rated = !_rated) : null,
+                      child: HcBadge.onHero(_rated ? 'Rated' : 'Casual'),
+                    ),
+                  ]),
                   const SizedBox(height: HcSpace.s1),
                   Text(
                     _quickGameLabel(quickGame['id'] as String),
@@ -633,7 +788,9 @@ class _PlayScreenState extends State<PlayScreen> {
                   ),
                   const SizedBox(height: 2),
                   HeroCard.sub(
-                    '${_categoryName(quickGame['category'] as String)} · rated · your last time control',
+                    _seeking == quickGame['id']
+                        ? 'Searching… ${_elapsedSec}s · within $_ratingWindow rating points'
+                        : '${_categoryName(quickGame['category'] as String)} · ${_rated ? 'rated' : 'casual'} · your last time control',
                   ),
                   const SizedBox(height: HcSpace.s4),
                   PlayButton(
@@ -646,6 +803,14 @@ class _PlayScreenState extends State<PlayScreen> {
               ),
             ),
           ),
+          if (_playingNow > 0)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(HcSpace.s4, 0, HcSpace.s4, HcSpace.s2),
+              child: Text(
+                '$_playingNow playing${_looking[_lastTimeControl] != null ? ', ${_looking[_lastTimeControl]} looking for ${_quickGameLabel(_lastTimeControl)}' : ''}',
+                style: HcText.bodySm.copyWith(color: hc.ink3),
+              ),
+            ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: HcSpace.s4),
             child: Column(
@@ -683,6 +848,19 @@ class _PlayScreenState extends State<PlayScreen> {
                     );
                   },
                 ),
+                if (_tier != 'free') ...[
+                  const SizedBox(height: HcSpace.s2),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: FilterChip(
+                      label: const Text('Chess960'),
+                      selected: _variant == 'chess960',
+                      onSelected: _seeking == null
+                          ? (v) => setState(() => _variant = v ? 'chess960' : 'standard')
+                          : null,
+                    ),
+                  ),
+                ],
                 if (_seeking != null) ...[
                   const SizedBox(height: HcSpace.s2),
                   Center(
@@ -712,6 +890,30 @@ class _PlayScreenState extends State<PlayScreen> {
                         ),
                         icon: const Icon(Icons.visibility_rounded, size: 20),
                         label: const Text('Watch live'),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: HcSpace.s3),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const OpenChallengesScreen()),
+                        ),
+                        icon: const Icon(Icons.public_rounded, size: 20),
+                        label: const Text('Open challenges'),
+                      ),
+                    ),
+                    const SizedBox(width: HcSpace.s3),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const CorrespondenceScreen()),
+                        ),
+                        icon: const Icon(Icons.calendar_today_rounded, size: 20),
+                        label: const Text('Daily games'),
                       ),
                     ),
                   ],
