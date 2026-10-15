@@ -31,6 +31,7 @@ class _SignInScreenState extends State<SignInScreen> {
   final _email = TextEditingController();
   final _password = TextEditingController();
   final _username = TextEditingController();
+  final _guardianEmail = TextEditingController();
   final _passwordFocus = FocusNode();
   _Mode _mode = _Mode.signIn;
   bool _busy = false;
@@ -42,11 +43,16 @@ class _SignInScreenState extends State<SignInScreen> {
   String? _state;
   bool _termsAccepted = false;
 
+  /// `under13`, `13_17` or `18_plus` -- sets the safety defaults, including whether online
+  /// play needs a guardian's approval first.
+  String? _ageBracket;
+
   static final _usernameRule = RegExp(r'^[a-z0-9_]{3,20}$');
 
   @override
   void dispose() {
     _passwordFocus.dispose();
+    _guardianEmail.dispose();
     super.dispose();
   }
 
@@ -140,6 +146,14 @@ class _SignInScreenState extends State<SignInScreen> {
     if (_mode == _Mode.signUp && username.isNotEmpty && !_usernameRule.hasMatch(username)) {
       return setState(() => _error = 'Usernames are 3–20 letters, numbers or underscores.');
     }
+    if (_mode == _Mode.signUp && _ageBracket == null) {
+      return setState(() => _error = 'Select your age range.');
+    }
+    final guardianEmail = _guardianEmail.text.trim().toLowerCase();
+    if (_mode == _Mode.signUp && _ageBracket == 'under13' &&
+        !RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(guardianEmail)) {
+      return setState(() => _error = "Enter a parent or guardian's email.");
+    }
     if (_mode == _Mode.signUp && !_termsAccepted) {
       return setState(() => _error = 'Agree to the Terms and Privacy Policy to continue.');
     }
@@ -164,6 +178,8 @@ class _SignInScreenState extends State<SignInScreen> {
               'country': 'NG',
               if (_state != null) 'state': _state,
               'terms_accepted': 'true',
+              if (_ageBracket != null) 'age_bracket': _ageBracket,
+              if (_ageBracket == 'under13') 'guardian_email': guardianEmail,
             },
             // Lands on our verified Android App Link; supabase_flutter's own deep-link
             // handling then signs the app in directly, without opening a browser.
@@ -280,6 +296,36 @@ class _SignInScreenState extends State<SignInScreen> {
                               ),
                               onSubmitted: (_) => _passwordFocus.requestFocus(),
                             ),
+                            const SizedBox(height: HcSpace.s4),
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text('How old are you?', style: HcText.bodySm.copyWith(color: hc.ink2)),
+                            ),
+                            const SizedBox(height: HcSpace.s2),
+                            Wrap(spacing: HcSpace.s2, runSpacing: HcSpace.s2, children: [
+                              for (final (value, label) in const [
+                                ('under13', 'Under 13'),
+                                ('13_17', '13 to 17'),
+                                ('18_plus', '18 or over'),
+                              ])
+                                ChoiceChip(
+                                  label: Text(label),
+                                  selected: _ageBracket == value,
+                                  onSelected: (_) => setState(() => _ageBracket = value),
+                                ),
+                            ]),
+                            if (_ageBracket == 'under13') ...[
+                              const SizedBox(height: HcSpace.s3),
+                              TextField(
+                                controller: _guardianEmail,
+                                keyboardType: TextInputType.emailAddress,
+                                textInputAction: TextInputAction.next,
+                                decoration: const InputDecoration(
+                                  labelText: "Parent or guardian's email",
+                                  helperText: 'They approve the account before you can play online',
+                                ),
+                              ),
+                            ],
                             const SizedBox(height: HcSpace.s3),
                             DropdownButtonFormField<String>(
                               initialValue: _state,
@@ -341,7 +387,11 @@ class _SignInScreenState extends State<SignInScreen> {
                           const SizedBox(height: HcSpace.s5),
                           FilledButton(
                             style: HcButtons.large(),
-                            onPressed: _busy || lockRemaining != null || (_mode == _Mode.signUp && !_termsAccepted) ? null : _submit,
+                            onPressed: _busy ||
+                                    lockRemaining != null ||
+                                    (_mode == _Mode.signUp && (!_termsAccepted || _ageBracket == null))
+                                ? null
+                                : _submit,
                             child: _busy
                                 ? const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2))
                                 : Text(lockRemaining != null

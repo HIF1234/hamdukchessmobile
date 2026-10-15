@@ -13,6 +13,7 @@ import 'auth/mfa_challenge_screen.dart';
 import 'auth/reset_password_screen.dart';
 import 'auth/sign_in_screen.dart';
 import 'bots/bot_results.dart';
+import 'core/api.dart';
 import 'core/app_config.dart';
 import 'core/force_update_screen.dart';
 import 'core/links.dart';
@@ -189,6 +190,9 @@ class _MfaCheckState extends State<_MfaCheck> {
         _loading = false;
       });
     }
+    // Best-effort and idempotent server-side: a child only reaches here once their own email
+    // is confirmed, which is also when it's safe to email their guardian the approval link.
+    if (factorId == null) unawaited(Api.instance.post('/guardian-consent').catchError((_) => null));
   }
 
   @override

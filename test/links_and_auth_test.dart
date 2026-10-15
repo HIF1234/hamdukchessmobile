@@ -58,6 +58,7 @@ void main() {
       await t.pump();
       await t.enterText(find.widgetWithText(TextField, 'Email'), 'ade@example.com');
       await t.enterText(find.widgetWithText(TextField, 'Password'), 'short');
+      await t.tap(find.text('18 or over'));
       await t.tap(find.byType(Checkbox));
       await t.pump();
       await t.tap(find.widgetWithText(FilledButton, 'Create account'));
@@ -73,6 +74,7 @@ void main() {
       await t.enterText(find.widgetWithText(TextField, 'Email'), 'ade@example.com');
       await t.enterText(find.widgetWithText(TextField, 'Username (optional)'), 'no spaces!');
       await t.enterText(find.widgetWithText(TextField, 'Password'), 'secret123');
+      await t.tap(find.text('18 or over'));
       await t.tap(find.byType(Checkbox));
       await t.pump();
       await t.tap(find.widgetWithText(FilledButton, 'Create account'));
@@ -87,6 +89,27 @@ void main() {
       await t.enterText(find.widgetWithText(TextField, 'Email'), 'ade@example.com');
       await t.enterText(find.widgetWithText(TextField, 'Password'), 'secret123');
       expect(t.widget<FilledButton>(find.widgetWithText(FilledButton, 'Create account')).onPressed, isNull);
+    });
+
+    testWidgets('sign-up asks for an age range, and under-13 needs a guardian email', (t) async {
+      await open(t);
+      await t.tap(find.text('New here? Create a free account'));
+      await t.pump();
+      expect(find.widgetWithText(TextField, "Parent or guardian's email"), findsNothing);
+
+      await t.enterText(find.widgetWithText(TextField, 'Email'), 'ade@example.com');
+      await t.enterText(find.widgetWithText(TextField, 'Password'), 'secret123');
+      await t.tap(find.byType(Checkbox));
+      await t.pump();
+      // No age range picked yet -- the button stays off, same as an unticked terms box.
+      expect(t.widget<FilledButton>(find.widgetWithText(FilledButton, 'Create account')).onPressed, isNull);
+
+      await t.tap(find.text('Under 13'));
+      await t.pump();
+      expect(find.widgetWithText(TextField, "Parent or guardian's email"), findsOneWidget);
+      await t.tap(find.widgetWithText(FilledButton, 'Create account'));
+      await t.pump();
+      expect(find.text("Enter a parent or guardian's email."), findsOneWidget);
     });
 
     testWidgets('forgot password hides the password field', (t) async {
