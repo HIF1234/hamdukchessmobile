@@ -19,6 +19,8 @@ class _ConversationScreenState extends State<ConversationScreen> {
   String? _otherId;
   String? _error;
   bool _sending = false;
+  bool _canFreeText = false;
+  List<String> _quickChatPhrases = const [];
   final _controller = TextEditingController();
 
   @override
@@ -41,6 +43,8 @@ class _ConversationScreenState extends State<ConversationScreen> {
       setState(() {
         _otherId = other?['id'] as String?;
         _messages = (r['messages'] as List).cast<Map<String, dynamic>>();
+        _canFreeText = r['canFreeText'] as bool? ?? false;
+        _quickChatPhrases = (r['quickChatPhrases'] as List?)?.cast<String>() ?? const [];
       });
     } on ApiError catch (e) {
       if (mounted) setState(() => _error = e.message);
@@ -77,8 +81,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
     }
   }
 
-  Future<void> _send() async {
-    final text = _controller.text.trim();
+  Future<void> _send() => _sendText(_controller.text.trim());
+
+  Future<void> _sendText(String text) async {
     final otherId = _otherId;
     if (text.isEmpty || otherId == null) return;
     setState(() => _sending = true);
@@ -91,6 +96,47 @@ class _ConversationScreenState extends State<ConversationScreen> {
     } finally {
       if (mounted) setState(() => _sending = false);
     }
+  }
+
+  Widget _freeTextInput() {
+    return Row(children: [
+      Expanded(
+        child: TextField(
+          controller: _controller,
+          decoration: const InputDecoration(hintText: 'Message…', isDense: true),
+          minLines: 1,
+          maxLines: 4,
+          onSubmitted: (_) => _send(),
+        ),
+      ),
+      const SizedBox(width: 8),
+      IconButton.filled(onPressed: _sending ? null : _send, icon: const Icon(Icons.send)),
+    ]);
+  }
+
+  // Strangers, and anyone who isn't an adult, can only send one of a few preset phrases --
+  // enforced server-side too, this is just the matching UI.
+  Widget _quickChatInput(ThemeData t) {
+    return Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Text(
+        'Free text is for friends who are both adults. Send a quick chat instead:',
+        textAlign: TextAlign.center,
+        style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
+      ),
+      const SizedBox(height: 8),
+      Wrap(
+        alignment: WrapAlignment.center,
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          for (final phrase in _quickChatPhrases)
+            ActionChip(
+              label: Text(phrase),
+              onPressed: _sending ? null : () => _sendText(phrase),
+            ),
+        ],
+      ),
+    ]);
   }
 
   @override
@@ -153,19 +199,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
           child: Padding(
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
             child: (AppConfig.current?.feature('chat') ?? true)
-                ? Row(children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _controller,
-                        decoration: const InputDecoration(hintText: 'Message…', isDense: true),
-                        minLines: 1,
-                        maxLines: 4,
-                        onSubmitted: (_) => _send(),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    IconButton.filled(onPressed: _sending ? null : _send, icon: const Icon(Icons.send)),
-                  ])
+                ? (_canFreeText ? _freeTextInput() : _quickChatInput(t))
                 : const Text('Messaging is temporarily unavailable.', textAlign: TextAlign.center),
           ),
         ),
