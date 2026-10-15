@@ -43,6 +43,16 @@
                 <data android:scheme="https" android:host="play.chess.hamduk.com.ng" android:pathPrefix="/auth/callback" />
             </intent-filter>
         </activity>
+        <!-- Home-screen widget: today's daily puzzle and streak (lib/core/home_widget_sync.dart
+             pushes the data; see HamdukWidgetProvider.kt). -->
+        <receiver android:name=".HamdukWidgetProvider" android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/hamduk_widget_info" />
+        </receiver>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

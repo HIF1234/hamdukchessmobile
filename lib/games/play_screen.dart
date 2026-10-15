@@ -7,6 +7,7 @@ import '../core/active_game.dart';
 import '../core/api.dart';
 import '../core/app_config.dart';
 import '../core/hc_widgets.dart';
+import '../core/home_widget_sync.dart';
 import '../core/notifications_screen.dart';
 import '../core/settings.dart';
 import '../core/storage.dart';
@@ -113,12 +114,14 @@ class _PlayScreenState extends State<PlayScreen> {
       final j = await Api.instance.get('/puzzles/daily');
       final me = await Api.instance.get('/me') as Map;
       final streak = ((me['puzzles'] as Map?)?['current_streak'] as num?)?.toInt() ?? 0;
+      final puzzle = j as Map<String, dynamic>?;
       if (mounted) {
         setState(() {
-          _dailyPuzzle = j as Map<String, dynamic>?;
+          _dailyPuzzle = puzzle;
           _puzzleStreak = streak;
         });
       }
+      unawaited(syncHomeWidget(rating: (puzzle?['rating'] as num?)?.toInt(), streak: streak));
     } catch (_) {
       // Offline or no puzzle today: the card just doesn't show.
     }

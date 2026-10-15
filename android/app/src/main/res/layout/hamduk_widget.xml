@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/hamduk_widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/hamduk_widget_background"
+    android:padding="12dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Hamduk Chess"
+        android:textColor="#F5A623"
+        android:textSize="12sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/hamduk_widget_rating"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="Daily puzzle"
+        android:textColor="#F0EDE8"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        tools:text="Rated 1450" />
+
+    <TextView
+        android:id="@+id/hamduk_widget_streak"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:text="Tap to solve today's puzzle"
+        android:textColor="#CFE0D4"
+        android:textSize="13sp"
+        tools:text="🔥 5 day streak" />
+</LinearLayout>
