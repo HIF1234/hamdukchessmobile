@@ -62,7 +62,7 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
           if (featured != null)
             Padding(
               padding: const EdgeInsets.fromLTRB(HcSpace.s4, 0, HcSpace.s4, HcSpace.s4),
-              child: _FeaturedTournamentHero(row: featured),
+              child: FeaturedTournamentHero(row: featured),
             ),
           Padding(
             padding: const EdgeInsets.fromLTRB(HcSpace.s4, HcSpace.s4, HcSpace.s4, 0),
@@ -96,8 +96,8 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
 }
 
 /// The next live or soonest-scheduled tournament, as the Tournaments tab's HeroCard.
-class _FeaturedTournamentHero extends StatelessWidget {
-  const _FeaturedTournamentHero({required this.row});
+class FeaturedTournamentHero extends StatelessWidget {
+  const FeaturedTournamentHero({super.key, required this.row});
   final Map<String, dynamic> row;
 
   @override
@@ -118,9 +118,9 @@ class _FeaturedTournamentHero extends StatelessWidget {
               style: HcText.displayMd.copyWith(color: HcColors.onForest), maxLines: 1, overflow: TextOverflow.ellipsis),
           const SizedBox(height: HcSpace.s1),
           HeroCard.sub([
-            _typeLabel(row['type'] as String?),
+            tournamentTypeLabel(row['type'] as String?),
             row['time_control'] as String?,
-            if (starts != null && !isLive) _relativeTime(starts),
+            if (starts != null && !isLive) tournamentRelativeTime(starts),
             feeKobo > 0 ? hcNaira(feeKobo) : 'Free',
           ].whereType<String>().join(' · ')),
           const SizedBox(height: HcSpace.s4),
@@ -177,7 +177,7 @@ class _TournamentRow extends StatelessWidget {
     final minTier = row['min_tier'] as String? ?? 'free';
     final starts = DateTime.tryParse(row['starts_at'] as String? ?? '');
     final subtitleParts = [
-      _typeLabel(row['type'] as String?),
+      tournamentTypeLabel(row['type'] as String?),
       row['time_control'],
       row['variant'],
       if (row['rated'] == false) 'casual',
@@ -202,7 +202,7 @@ class _TournamentRow extends StatelessWidget {
         ]),
         if (starts != null) ...[
           const SizedBox(height: 4),
-          Text(_relativeTime(starts), style: HcText.label.copyWith(fontSize: 12, color: hc.ink3)),
+          Text(tournamentRelativeTime(starts), style: HcText.label.copyWith(fontSize: 12, color: hc.ink3)),
         ],
       ]),
       onTap: () => Navigator.of(context).push(
@@ -212,7 +212,7 @@ class _TournamentRow extends StatelessWidget {
   }
 }
 
-String _typeLabel(String? type) => switch (type) {
+String tournamentTypeLabel(String? type) => switch (type) {
       'swiss' => 'Swiss',
       'arena' => 'Arena',
       'round_robin' => 'Round-robin',
@@ -220,7 +220,7 @@ String _typeLabel(String? type) => switch (type) {
       _ => type ?? '',
     };
 
-String _relativeTime(DateTime d) {
+String tournamentRelativeTime(DateTime d) {
   final diff = d.difference(DateTime.now());
   if (diff.isNegative) return 'started';
   if (diff.inMinutes < 60) return 'in ${diff.inMinutes}m';

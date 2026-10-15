@@ -15,10 +15,17 @@ sealed class ActiveGame {
 
   /// Null once consumed (or when nothing's in progress), so a cold start resumes at most once.
   static Future<ActiveGame?> takePending() async {
+    final pending = await peek();
+    if (pending != null) await clear();
+    return pending;
+  }
+
+  /// Same as [takePending] but doesn't clear it -- for Play's continue card, which needs to
+  /// keep showing a bot game in progress across rebuilds, not just once.
+  static Future<ActiveGame?> peek() async {
     final store = await JsonStore.open();
     final raw = await store.read(_key);
     if (raw is! Map) return null;
-    await store.write(_key, null);
     return switch (raw['type']) {
       'online' => OnlineActiveGame(raw['gameId'] as String),
       'bot' => BotActiveGame(

@@ -14,6 +14,7 @@ import 'auth/reset_password_screen.dart';
 import 'auth/sign_in_screen.dart';
 import 'bots/bot_results.dart';
 import 'core/api.dart';
+import 'core/app_shortcuts.dart';
 import 'core/app_config.dart';
 import 'core/first_move.dart';
 import 'core/force_update_screen.dart';
@@ -51,6 +52,7 @@ Future<void> main() async {
     if (auth.currentSession != null) unawaited(BotResults.sync());
   }
   unawaited(IncomingLinks.instance.start());
+  unawaited(AppShortcuts.start());
   AppLifecycleListener(onPause: () => Telemetry.sessionData(bytes: DataMeter.bytes, since: DataMeter.started));
   runApp(HamdukChessApp(config: config, showOnboarding: !seenOnboarding, appVersion: appVersion));
 }

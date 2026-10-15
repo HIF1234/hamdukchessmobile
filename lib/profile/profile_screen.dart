@@ -13,7 +13,6 @@ import '../core/push.dart';
 import '../core/settings.dart';
 import '../core/theme.dart';
 import '../core/ui.dart';
-import '../learn/learn_screen.dart';
 import 'leaderboard_screen.dart';
 import 'subscription_sheet.dart';
 
@@ -128,12 +127,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 const SizedBox(height: HcSpace.s5),
               ],
-              OutlinedButton.icon(
-                onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LearnScreen())),
-                icon: const Icon(Icons.menu_book_outlined),
-                label: const Text('Learn: tutorials & video lessons'),
-              ),
-              const SizedBox(height: 10),
               OutlinedButton.icon(
                 onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LeaderboardScreen())),
                 icon: const Icon(Icons.leaderboard_outlined),

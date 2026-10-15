@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../core/active_game.dart';
 import '../core/api.dart';
 import '../core/app_config.dart';
 import '../core/hc_widgets.dart';
@@ -13,13 +14,26 @@ import '../core/theme.dart';
 import '../core/ui.dart';
 import '../bots/bot_game_screen.dart';
 import '../engine/device.dart';
+import '../local_play/local_tournament_home_screen.dart';
 import '../profile/subscription_sheet.dart';
+import '../puzzles/daily_puzzle_screen.dart';
+import '../tournaments/tournaments_screen.dart';
 import 'challenge_screens.dart';
 import 'game_history_screen.dart';
 import 'game_screen.dart';
+import 'game_state.dart';
 import 'spectate_screen.dart';
 
 String _categoryName(String category) => category.isEmpty ? '' : '${category[0].toUpperCase()}${category.substring(1)}';
+
+/// Lets something outside PlayScreen (the "Play 5 min" icon shortcut) ask it to start
+/// seeking -- PlayScreen is built once and kept alive by HomeShell's IndexedStack, so a
+/// broadcast stream reaches it on every request, not just the first.
+class PlayScreenActions {
+  static final _seekController = StreamController<String>.broadcast();
+  static Stream<String> get seekRequests => _seekController.stream;
+  static void requestSeek(String timeControl) => _seekController.add(timeControl);
+}
 
 /// "10+0" -> "10 min" for the Quick game headline.
 String _quickGameLabel(String id) => '${id.split('+').first} min';
@@ -49,15 +63,102 @@ class _PlayScreenState extends State<PlayScreen> {
   String _lastTimeControl = '10+0'; // Quick game defaults to 10+0 on first launch
   int _unread = 0;
 
+  List<GameState>? _activeGames; // online games in progress, your-move first
+  ActiveGame? _pendingBot; // a bot game left mid-way, if any
+  Map<String, dynamic>? _dailyPuzzle;
+  int _puzzleStreak = 0;
+  List<Map<String, dynamic>> _onlineFriends = const [];
+  Map<String, dynamic>? _joinedTournament; // the next one I'm in, if any
+  StreamSubscription<String>? _seekRequests;
+
   @override
   void initState() {
     super.initState();
     _loadMe();
     _loadLastTimeControl();
     _loadUnread();
+    _loadContinue();
+    _loadDaily();
+    _loadFriendsOnline();
+    _loadTournament();
     Device.isLowMemory().then((v) {
       if (mounted) setState(() => _lowMemory = v);
     }).catchError((_) {});
+    _seekRequests = PlayScreenActions.seekRequests.listen((tc) {
+      if (_seeking == null) _seek(tc);
+    });
+  }
+
+  /// Unfinished games for the continue card: online games in progress (from /games) plus a
+  /// bot game left mid-way (tracked locally, since bot games never touch the server).
+  Future<void> _loadContinue() async {
+    final bot = await ActiveGame.peek();
+    if (mounted) setState(() => _pendingBot = bot is BotActiveGame ? bot : null);
+    try {
+      final r = await Api.instance.get('/games') as Map<String, dynamic>;
+      final active = (r['active'] as List).cast<Map<String, dynamic>>().map(GameState.fromApi).toList()
+        ..sort((a, b) {
+          final aMine = a.whiteToMove == (a.white.id == _myId);
+          final bMine = b.whiteToMove == (b.white.id == _myId);
+          return aMine == bMine ? 0 : (aMine ? -1 : 1);
+        });
+      if (mounted) setState(() => _activeGames = active);
+    } on ApiError {
+      // Offline or failed: the card just shows the bot game, if any.
+    }
+  }
+
+  Future<void> _loadDaily() async {
+    try {
+      final j = await Api.instance.get('/puzzles/daily');
+      final me = await Api.instance.get('/me') as Map;
+      final streak = ((me['puzzles'] as Map?)?['current_streak'] as num?)?.toInt() ?? 0;
+      if (mounted) {
+        setState(() {
+          _dailyPuzzle = j as Map<String, dynamic>?;
+          _puzzleStreak = streak;
+        });
+      }
+    } catch (_) {
+      // Offline or no puzzle today: the card just doesn't show.
+    }
+  }
+
+  Future<void> _loadFriendsOnline() async {
+    try {
+      final r = await Api.instance.get('/social/friends') as Map<String, dynamic>;
+      final accepted = (r['accepted'] as List).cast<Map<String, dynamic>>();
+      if (mounted) setState(() => _onlineFriends = accepted.where((f) => f['online'] == true).toList());
+    } catch (_) {
+      // Offline or failed: the row just doesn't show.
+    }
+  }
+
+  Future<void> _loadTournament() async {
+    try {
+      final r = await Api.instance.get('/tournaments') as Map<String, dynamic>;
+      final rows = (r['tournaments'] as List).cast<Map<String, dynamic>>();
+      final mine = rows.where((t) => t['joined'] == true && t['status'] != 'completed').toList()
+        ..sort((a, b) => (a['starts_at'] as String? ?? '').compareTo(b['starts_at'] as String? ?? ''));
+      if (mounted) setState(() => _joinedTournament = mine.isEmpty ? null : mine.first);
+    } catch (_) {
+      // Offline or failed: the section just doesn't show.
+    }
+  }
+
+  Future<void> _challengeOnlineFriend(Map<String, dynamic> friend) async {
+    try {
+      final r = await Api.instance.post('/challenges', {'timeControl': _lastTimeControl, 'color': 'random', 'rated': false}) as Map;
+      final id = r['id'] as String;
+      final url = r['url'] as String;
+      await Api.instance.post('/social/messages/send', {'recipientId': friend['userId'], 'content': shareText(_lastTimeControl, url)});
+      if (!mounted) return;
+      await Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => ChallengeWaitScreen(challengeId: id, url: url, timeControl: _lastTimeControl),
+      ));
+    } on ApiError catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    }
   }
 
   Future<void> _loadUnread() async {
@@ -300,6 +401,7 @@ class _PlayScreenState extends State<PlayScreen> {
   @override
   void dispose() {
     _timer?.cancel();
+    _seekRequests?.cancel();
     final ch = _channel;
     if (ch != null) Supabase.instance.client.removeChannel(ch);
     super.dispose();
@@ -335,6 +437,12 @@ class _PlayScreenState extends State<PlayScreen> {
             ),
           ],
         ),
+        if (AppSettings.instance.lowData)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(HcSpace.s4, 0, HcSpace.s4, HcSpace.s2),
+            child: Text('${DataMeter.label} this session', style: HcText.bodySm.copyWith(color: hc.ink3)),
+          ),
+        _ContinueCard(games: _activeGames, pendingBot: _pendingBot, myId: _myId, config: widget.config),
         Padding(
           padding: const EdgeInsets.fromLTRB(HcSpace.s4, 0, HcSpace.s4, HcSpace.s4),
           child: HeroCard(
@@ -406,6 +514,51 @@ class _PlayScreenState extends State<PlayScreen> {
               ),
             ]),
             const SizedBox(height: HcSpace.s7),
+            if (_dailyPuzzle != null) ...[
+              _DailyPuzzleCard(puzzle: _dailyPuzzle!, streak: _puzzleStreak),
+              const SizedBox(height: HcSpace.s7),
+            ],
+            if (_onlineFriends.isNotEmpty) ...[
+              const SectionLabel('Friends online'),
+              const SizedBox(height: HcSpace.s2),
+              SizedBox(
+                height: 76,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _onlineFriends.length,
+                  separatorBuilder: (context, i) => const SizedBox(width: HcSpace.s3),
+                  itemBuilder: (context, i) {
+                    final f = _onlineFriends[i];
+                    return _OnlineFriendTile(friend: f, onTap: () => _challengeOnlineFriend(f));
+                  },
+                ),
+              ),
+              const SizedBox(height: HcSpace.s7),
+            ],
+            if (_joinedTournament != null) ...[
+              const SectionLabel('Your tournament'),
+              const SizedBox(height: HcSpace.s2),
+              FeaturedTournamentHero(row: _joinedTournament!),
+              const SizedBox(height: HcSpace.s3),
+            ],
+            Row(children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TournamentsScreen())),
+                  icon: const Icon(Icons.emoji_events_outlined, size: 20),
+                  label: const Text('All tournaments'),
+                ),
+              ),
+              const SizedBox(width: HcSpace.s3),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LocalTournamentHomeScreen())),
+                  icon: const Icon(Icons.wifi_tethering_rounded, size: 20),
+                  label: const Text('Host local'),
+                ),
+              ),
+            ]),
+            const SizedBox(height: HcSpace.s7),
             const SectionLabel('Naija bots'),
             Text(
               "Play offline, no data needed. Bot games don't change your rating.",
@@ -446,6 +599,135 @@ class _PlayScreenState extends State<PlayScreen> {
         ),
         const SizedBox(height: HcSpace.s4),
       ],
+    );
+  }
+}
+
+/// Unfinished games, your-move ones first: online games in progress plus a bot game left
+/// mid-way (bot games never reach the server, so that one comes from ActiveGame instead).
+class _ContinueCard extends StatelessWidget {
+  const _ContinueCard({required this.games, required this.pendingBot, required this.myId, required this.config});
+  final List<GameState>? games;
+  final ActiveGame? pendingBot;
+  final String myId;
+  final AppConfig config;
+
+  @override
+  Widget build(BuildContext context) {
+    final online = games ?? const [];
+    final bot = pendingBot;
+    if (online.isEmpty && bot is! BotActiveGame) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(HcSpace.s4, 0, HcSpace.s4, HcSpace.s4),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const SectionLabel('Continue'),
+        const SizedBox(height: HcSpace.s2),
+        HcListGroup(children: [
+          for (final g in online) _ContinueGameRow(game: g, myId: myId),
+          if (bot is BotActiveGame) _ContinueBotRow(bot: bot, config: config),
+        ]),
+      ]),
+    );
+  }
+}
+
+class _ContinueGameRow extends StatelessWidget {
+  const _ContinueGameRow({required this.game, required this.myId});
+  final GameState game;
+  final String myId;
+
+  @override
+  Widget build(BuildContext context) {
+    final isWhite = game.white.id == myId;
+    final opponent = isWhite ? game.black : game.white;
+    final yourMove = game.whiteToMove == isWhite;
+    return HcListRow(
+      leading: HcAvatar(name: opponent.username, size: HcSize.avatarMd),
+      title: 'vs ${opponent.username}',
+      subtitle: '${yourMove ? 'Your move' : "Opponent's move"} · ${game.timeControl}',
+      trailing: const Icon(Icons.chevron_right_rounded),
+      onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => GameScreen(gameId: game.id, myId: myId))),
+    );
+  }
+}
+
+class _ContinueBotRow extends StatelessWidget {
+  const _ContinueBotRow({required this.bot, required this.config});
+  final BotActiveGame bot;
+  final AppConfig config;
+
+  @override
+  Widget build(BuildContext context) {
+    final matches = config.bots.where((b) => b['id'] == bot.botId);
+    if (matches.isEmpty) return const SizedBox.shrink();
+    final persona = matches.first;
+    return HcListRow(
+      leading: HcAvatar(name: persona['name'] as String, size: HcSize.avatarMd),
+      title: 'vs ${persona['name']}',
+      subtitle: 'Your move · bot game',
+      trailing: const Icon(Icons.chevron_right_rounded),
+      onTap: () => Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => BotGameScreen(bot: persona, playWhite: bot.playWhite, initialSanMoves: bot.sanMoves),
+      )),
+    );
+  }
+}
+
+/// Today's puzzle and the streak, one tap to solve.
+class _DailyPuzzleCard extends StatelessWidget {
+  const _DailyPuzzleCard({required this.puzzle, required this.streak});
+  final Map<String, dynamic> puzzle;
+  final int streak;
+
+  @override
+  Widget build(BuildContext context) {
+    final hc = context.hc;
+    return InkWell(
+      borderRadius: BorderRadius.circular(HcRadius.md),
+      onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DailyPuzzleScreen())),
+      child: Container(
+        padding: const EdgeInsets.all(HcSpace.s4),
+        decoration: BoxDecoration(color: hc.greenSoft, borderRadius: BorderRadius.circular(HcRadius.md)),
+        child: Row(children: [
+          Icon(Icons.extension_rounded, color: hc.green, size: 28),
+          const SizedBox(width: HcSpace.s3),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Daily puzzle', style: HcText.titleMd.copyWith(color: hc.ink)),
+              Text('Rated ${puzzle['rating']} · one tap to solve', style: HcText.bodySm.copyWith(color: hc.ink2)),
+            ]),
+          ),
+          if (streak > 0) HcBadge.streak(streak),
+        ]),
+      ),
+    );
+  }
+}
+
+class _OnlineFriendTile extends StatelessWidget {
+  const _OnlineFriendTile({required this.friend, required this.onTap});
+  final Map<String, dynamic> friend;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final hc = context.hc;
+    return InkWell(
+      borderRadius: BorderRadius.circular(HcRadius.md),
+      onTap: onTap,
+      child: SizedBox(
+        width: 64,
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          HcAvatar(name: friend['username'] as String? ?? '?', size: HcSize.avatarMd, online: true),
+          const SizedBox(height: 4),
+          Text(
+            friend['username'] as String? ?? '',
+            style: HcText.bodySm.copyWith(color: hc.ink2),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ]),
+      ),
     );
   }
 }

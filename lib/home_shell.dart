@@ -12,6 +12,7 @@ import 'bots/bot_game_screen.dart';
 import 'core/active_game.dart';
 import 'core/api.dart';
 import 'core/app_config.dart';
+import 'core/app_shortcuts.dart';
 import 'core/first_move.dart';
 import 'core/hc_widgets.dart';
 import 'core/links.dart';
@@ -24,11 +25,13 @@ import 'games/game_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'games/challenge_screens.dart';
 import 'games/play_screen.dart';
+import 'learn/learn_screen.dart';
 import 'learn/tutorial_screen.dart';
+import 'local_play/local_tournament_home_screen.dart';
 import 'profile/profile_screen.dart';
+import 'puzzles/daily_puzzle_screen.dart';
 import 'puzzles/puzzles_screen.dart';
 import 'social/social_screen.dart';
-import 'tournaments/tournaments_screen.dart';
 
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key, required this.config, required this.appVersion});
@@ -46,6 +49,14 @@ class _HomeShellState extends State<HomeShell> {
   bool _offlineBannerDismissed = false;
   bool _updateBannerDismissed = false;
 
+  bool _online = true;
+  StreamSubscription<List<ConnectivityResult>>? _connectivity;
+  Timer? _presenceTimer;
+  Timer? _badgeTimer;
+  int _yourMoveCount = 0; // Play tab badge
+  bool _socialUnread = false; // Social tab dot
+  StreamSubscription<AppShortcut>? _shortcutTaps;
+
   @override
   void initState() {
     super.initState();
@@ -62,7 +73,73 @@ class _HomeShellState extends State<HomeShell> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _maybeResumeGame());
     WidgetsBinding.instance.addPostFrameCallback((_) => _maybeStartFirstMove());
     WidgetsBinding.instance.addPostFrameCallback((_) => _maybeOfferLowData());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _handleShortcut());
     WidgetsBinding.instance.addPostFrameCallback((_) => maybeShowWhatsNew(context, widget.appVersion));
+    _watchConnectivity();
+    _loadBadges();
+    _badgeTimer = Timer.periodic(const Duration(seconds: 30), (_) => _loadBadges());
+    _sendPresence();
+    _presenceTimer = Timer.periodic(const Duration(seconds: 20), (_) => _sendPresence());
+    _shortcutTaps = AppShortcuts.onTap.listen(_runShortcut);
+  }
+
+  void _handleShortcut() {
+    final shortcut = AppShortcuts.take();
+    if (shortcut != null) _runShortcut(shortcut);
+  }
+
+  void _runShortcut(AppShortcut shortcut) {
+    switch (shortcut) {
+      case AppShortcut.play5:
+        setState(() => _tab = _homeTab);
+        PlayScreenActions.requestSeek('5+0');
+      case AppShortcut.dailyPuzzle:
+        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DailyPuzzleScreen()));
+      case AppShortcut.hostLocal:
+        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LocalTournamentHomeScreen()));
+    }
+  }
+
+  Future<void> _watchConnectivity() async {
+    final initial = await Connectivity().checkConnectivity();
+    if (mounted) setState(() => _online = !initial.contains(ConnectivityResult.none));
+    _connectivity = Connectivity().onConnectivityChanged.listen((r) {
+      if (mounted) setState(() => _online = !r.contains(ConnectivityResult.none));
+    });
+  }
+
+  void _sendPresence() {
+    if (Supabase.instance.client.auth.currentSession == null) return;
+    Api.instance.post('/presence').catchError((_) => null);
+  }
+
+  /// Games waiting for your move (Play tab) and unread messages/friend requests (Social
+  /// tab) -- a plain poll, same cadence the rest of the app already uses for this kind of
+  /// thing, rather than a dedicated realtime channel for a badge.
+  Future<void> _loadBadges() async {
+    if (Supabase.instance.client.auth.currentSession == null) return;
+    try {
+      final games = await Api.instance.get('/games') as Map<String, dynamic>;
+      final active = (games['active'] as List).cast<Map<String, dynamic>>();
+      final me = Supabase.instance.client.auth.currentUser!.id;
+      final yourMove = active.where((g) {
+        final isWhite = g['white_id'] == me;
+        final whiteToMove = (g['fen'] as String).split(' ')[1] == 'w';
+        return whiteToMove == isWhite;
+      }).length;
+      if (mounted) setState(() => _yourMoveCount = yourMove);
+    } catch (_) {
+      // Leave the last known count rather than flashing it away on a blip.
+    }
+    try {
+      final friends = await Api.instance.get('/social/friends') as Map<String, dynamic>;
+      final incoming = (friends['incoming'] as List).isNotEmpty;
+      final messages = await Api.instance.get('/social/messages') as Map<String, dynamic>;
+      final unread = (messages['conversations'] as List).cast<Map>().any((c) => (c['unread'] as int? ?? 0) > 0);
+      if (mounted) setState(() => _socialUnread = incoming || unread);
+    } catch (_) {
+      // Same as above.
+    }
   }
 
   /// Registers this phone for push right away only if notification permission was already
@@ -189,65 +266,81 @@ class _HomeShellState extends State<HomeShell> {
   void dispose() {
     _links?.cancel();
     _gameLinks?.cancel();
+    _connectivity?.cancel();
+    _presenceTimer?.cancel();
+    _badgeTimer?.cancel();
+    _shortcutTaps?.cancel();
     super.dispose();
   }
+
+  static const _homeTab = 0; // Play
 
   @override
   Widget build(BuildContext context) {
     final pages = [
-      const PuzzlesScreen(),
       PlayScreen(config: widget.config),
-      const TournamentsScreen(),
+      const PuzzlesScreen(),
+      const LearnScreen(),
       const SocialScreen(),
       const ProfileScreen(),
     ];
-    return Scaffold(
-      body: SafeArea(
-        child: Column(
-          children: [
-            if (widget.config.maintenanceEnabled)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(HcSpace.s4, HcSpace.s2, HcSpace.s4, 0),
-                child: HcBanner(icon: Icons.build_rounded, text: widget.config.maintenanceMessage, tone: HcBannerTone.info),
-              ),
-            if (widget.config.isBundledFallback && !_offlineBannerDismissed)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(HcSpace.s4, HcSpace.s2, HcSpace.s4, 0),
-                child: HcBanner(
-                  icon: Icons.cloud_off_rounded,
-                  text: "You're offline. Bots, puzzles and local play still work.",
-                  tone: HcBannerTone.info,
-                  actions: [TextButton(style: HcButtons.small(), onPressed: () => setState(() => _offlineBannerDismissed = true), child: const Text('Dismiss'))],
+    return PopScope(
+      canPop: _tab == _homeTab,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) setState(() => _tab = _homeTab);
+      },
+      child: Scaffold(
+        body: SafeArea(
+          child: Column(
+            children: [
+              if (widget.config.maintenanceEnabled)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(HcSpace.s4, HcSpace.s2, HcSpace.s4, 0),
+                  child: HcBanner(icon: Icons.build_rounded, text: widget.config.maintenanceMessage, tone: HcBannerTone.info),
                 ),
-              ),
-            if (!_updateBannerDismissed && widget.config.hasOptionalUpdate(widget.appVersion))
-              Padding(
-                padding: const EdgeInsets.fromLTRB(HcSpace.s4, HcSpace.s2, HcSpace.s4, 0),
-                child: HcBanner(
-                  icon: Icons.system_update_rounded,
-                  text: 'A new version of Hamduk Chess is available.',
-                  tone: HcBannerTone.offer,
-                  actions: [TextButton(style: HcButtons.small(), onPressed: () => setState(() => _updateBannerDismissed = true), child: const Text('Dismiss'))],
+              if ((!_online || widget.config.isBundledFallback) && !_offlineBannerDismissed)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(HcSpace.s4, HcSpace.s2, HcSpace.s4, 0),
+                  child: HcBanner(
+                    icon: Icons.cloud_off_rounded,
+                    text: 'Offline. Bots, puzzles and local play still work.',
+                    tone: HcBannerTone.info,
+                    actions: [TextButton(style: HcButtons.small(), onPressed: () => setState(() => _offlineBannerDismissed = true), child: const Text('Dismiss'))],
+                  ),
                 ),
-              ),
-            Expanded(child: IndexedStack(index: _tab, children: pages)),
+              if (!_updateBannerDismissed && widget.config.hasOptionalUpdate(widget.appVersion))
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(HcSpace.s4, HcSpace.s2, HcSpace.s4, 0),
+                  child: HcBanner(
+                    icon: Icons.system_update_rounded,
+                    text: 'A new version of Hamduk Chess is available.',
+                    tone: HcBannerTone.offer,
+                    actions: [TextButton(style: HcButtons.small(), onPressed: () => setState(() => _updateBannerDismissed = true), child: const Text('Dismiss'))],
+                  ),
+                ),
+              Expanded(child: IndexedStack(index: _tab, children: pages)),
+            ],
+          ),
+        ),
+        bottomNavigationBar: NavigationBar(
+          selectedIndex: _tab,
+          onDestinationSelected: (i) => setState(() => _tab = i),
+          destinations: [
+            NavigationDestination(
+              icon: _yourMoveCount > 0 ? Badge(label: Text('$_yourMoveCount'), child: const KnightIcon()) : const KnightIcon(),
+              selectedIcon: _yourMoveCount > 0 ? Badge(label: Text('$_yourMoveCount'), child: const KnightIcon()) : const KnightIcon(),
+              label: 'Play',
+            ),
+            const NavigationDestination(icon: Icon(Icons.extension_outlined), selectedIcon: Icon(Icons.extension_rounded), label: 'Puzzles'),
+            const NavigationDestination(icon: Icon(Icons.menu_book_outlined), selectedIcon: Icon(Icons.menu_book_rounded), label: 'Learn'),
+            NavigationDestination(
+              icon: _socialUnread ? const Badge(child: Icon(Icons.people_outline_rounded)) : const Icon(Icons.people_outline_rounded),
+              selectedIcon: _socialUnread ? const Badge(child: Icon(Icons.people_rounded)) : const Icon(Icons.people_rounded),
+              label: 'Social',
+            ),
+            const NavigationDestination(icon: Icon(Icons.person_outline_rounded), selectedIcon: Icon(Icons.person_rounded), label: 'Profile'),
           ],
         ),
-      ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _tab,
-        onDestinationSelected: (i) => setState(() => _tab = i),
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.extension_outlined), selectedIcon: Icon(Icons.extension_rounded), label: 'Puzzles'),
-          NavigationDestination(icon: KnightIcon(), selectedIcon: KnightIcon(), label: 'Play'),
-          NavigationDestination(
-            icon: Icon(Icons.emoji_events_outlined),
-            selectedIcon: Icon(Icons.emoji_events_rounded),
-            label: 'Tournaments',
-          ),
-          NavigationDestination(icon: Icon(Icons.people_outline_rounded), selectedIcon: Icon(Icons.people_rounded), label: 'Social'),
-          NavigationDestination(icon: Icon(Icons.person_outline_rounded), selectedIcon: Icon(Icons.person_rounded), label: 'Profile'),
-        ],
       ),
     );
   }

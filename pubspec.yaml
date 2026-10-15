@@ -53,6 +53,8 @@ dependencies:
   mobile_scanner: ^7.4.2
   passkeys: ^2.23.1
   package_info_plus: ^10.2.2
+  quick_actions: ^1.1.1
+  home_widget: ^0.10.0
 
 dev_dependencies:
   flutter_test:

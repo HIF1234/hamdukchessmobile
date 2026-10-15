@@ -1331,6 +1331,47 @@ class EmptyState extends StatelessWidget {
   }
 }
 
+/// A grey placeholder shape where a card or row will appear, instead of a spinner -- the
+/// loading state for a list that already knows its own layout (Play's continue/friends
+/// rows, the daily puzzle card). A gentle pulse, not a shimmer sweep, to stay cheap on
+/// older phones (spec's perf budget).
+class HcSkeleton extends StatefulWidget {
+  const HcSkeleton({super.key, this.width, required this.height, this.radius = HcRadius.md});
+  final double? width;
+  final double height;
+  final double radius;
+
+  @override
+  State<HcSkeleton> createState() => _HcSkeletonState();
+}
+
+class _HcSkeletonState extends State<HcSkeleton> with SingleTickerProviderStateMixin {
+  late final _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))
+    ..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hc = context.hc;
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) => Container(
+        width: widget.width,
+        height: widget.height,
+        decoration: BoxDecoration(
+          color: Color.lerp(hc.surface2, hc.line, _controller.value),
+          borderRadius: BorderRadius.circular(widget.radius),
+        ),
+      ),
+    );
+  }
+}
+
 /// Signal bars + "123ms" in an online game's app bar, so a player notices their own
 /// connection is bad before it costs them a move -- not just when the opponent's does.
 class ConnectionSignal extends StatelessWidget {
