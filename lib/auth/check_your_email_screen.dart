@@ -12,9 +12,13 @@ import 'auth_errors.dart';
 /// tapping the link (handled automatically via the app's deep link) or by typing the same
 /// email's 6-digit code here.
 class CheckYourEmailScreen extends StatefulWidget {
-  const CheckYourEmailScreen({super.key, required this.email, required this.onChangeEmail});
+  const CheckYourEmailScreen({super.key, required this.email, required this.onChangeEmail, this.otpType = OtpType.signup});
   final String email;
   final VoidCallback onChangeEmail;
+
+  /// `OtpType.signup` after a fresh sign-up; `OtpType.emailChange` when converting a guest
+  /// (anonymous) session, since that confirms a changed email on an existing account instead.
+  final OtpType otpType;
 
   @override
   State<CheckYourEmailScreen> createState() => _CheckYourEmailScreenState();
@@ -60,7 +64,7 @@ class _CheckYourEmailScreenState extends State<CheckYourEmailScreen> {
       _error = null;
     });
     try {
-      await Supabase.instance.client.auth.resend(type: OtpType.signup, email: widget.email);
+      await Supabase.instance.client.auth.resend(type: widget.otpType, email: widget.email);
       _startCountdown();
     } catch (e) {
       if (mounted) setState(() => _error = friendlyAuthError(e));
@@ -77,7 +81,7 @@ class _CheckYourEmailScreenState extends State<CheckYourEmailScreen> {
     });
     try {
       await Supabase.instance.client.auth
-          .verifyOTP(type: OtpType.signup, email: widget.email, token: _code.text.trim());
+          .verifyOTP(type: widget.otpType, email: widget.email, token: _code.text.trim());
       // A verified session lands here automatically; the auth gate notices and moves on.
     } catch (e) {
       if (mounted) setState(() => _error = friendlyAuthError(e));

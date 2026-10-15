@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:chess/chess.dart' as ch;
 import 'package:flutter/material.dart';
 
+import '../auth/guest_conversion.dart';
 import '../board/chess_board.dart';
 import '../core/settings.dart';
 import 'local_network.dart';
@@ -142,6 +143,9 @@ class _LocalGameScreenState extends State<LocalGameScreen> {
       };
     });
     widget.sendResult(result);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) GuestConversion.gameFinished(context);
+    });
   }
 
   void _resign() => _finish(widget.playWhite ? 'black' : 'white', 'resignation');

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:chess/chess.dart' as ch;
 import 'package:flutter/material.dart';
 
+import '../auth/guest_conversion.dart';
 import '../board/chess_board.dart';
 import '../core/hc_widgets.dart';
 import '../core/settings.dart';
@@ -285,6 +286,7 @@ class _BotGameScreenState extends State<BotGameScreen> {
         );
       },
     );
+    if (mounted) await GuestConversion.gameFinished(context);
   }
 
   @override

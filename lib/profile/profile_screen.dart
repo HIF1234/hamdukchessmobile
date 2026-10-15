@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../auth/passkeys_screen.dart';
+import '../auth/save_account_screen.dart';
 import '../auth/two_factor_screen.dart';
 import '../coaching/coaches_screen.dart';
 import '../coaching/my_sessions_screen.dart';
@@ -182,7 +183,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     subtitle: 'End every other session -- for a lost or stolen phone',
                     onTap: () => _signOutEverywhere(context),
                   ),
-                ],
+                ] else
+                  HcListRow(
+                    title: 'Save my account',
+                    subtitle: "Keep your games and rating -- you're playing as a guest",
+                    onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SaveAccountScreen())),
+                  ),
                 HcListRow(
                   title: 'About & licences',
                   subtitle: 'Open-source software used in this app',
