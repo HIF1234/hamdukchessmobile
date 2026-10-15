@@ -89,4 +89,30 @@ void main() {
     expect(game(pgn: '1. e4 e5 2. Nf3').lastMove, ('g1', 'f3'));
     expect(game(pgn: null).lastMove, isNull);
   });
+
+  group('material', () {
+    test('the starting position has no captures and no advantage', () {
+      final m = game().material;
+      expect(m.whiteCaptured, isEmpty);
+      expect(m.blackCaptured, isEmpty);
+      expect(m.advantage, 0);
+    });
+
+    test('a captured knight shows on the capturer\'s bar and tips the advantage', () {
+      // White has taken black's knight on b8's side (no black knight on g8 either, but
+      // let's keep it to one capture): FEN with black missing its g8 knight.
+      final fen = 'rnbqkb1r/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+      final m = game(fen: fen).material;
+      expect(m.whiteCaptured, ['bN']);
+      expect(m.blackCaptured, isEmpty);
+      expect(m.advantage, 3);
+    });
+
+    test('advantage is negative when black is ahead', () {
+      final fen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKB1R w KQkq - 0 1'; // white missing a knight
+      final m = game(fen: fen).material;
+      expect(m.blackCaptured, ['wN']);
+      expect(m.advantage, -3);
+    });
+  });
 }

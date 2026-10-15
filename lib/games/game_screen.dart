@@ -243,9 +243,11 @@ class _GameScreenState extends State<GameScreen> {
             final spectating = !c.isParticipant;
 
             final moveList = MoveListRibbon(san: g.sanMoves, current: g.sanMoves.isEmpty ? -1 : g.sanMoves.length - 1);
+            final mat = g.material;
             final opponentBar = PlayerBar(
               name: opp.username,
               rating: opp.rating,
+              country: opp.country,
               avatar: HcAvatar(name: opp.username),
               status: switch (c.opponentPresence) {
                 OpponentPresence.reconnecting => 'Disconnected, reconnecting…',
@@ -253,6 +255,8 @@ class _GameScreenState extends State<GameScreen> {
                 OpponentPresence.connected => g.active && g.whiteToMove != c.isWhite ? 'Thinking…' : null,
               },
               warn: c.opponentPresence != OpponentPresence.connected,
+              captured: c.isWhite ? mat.blackCaptured : mat.whiteCaptured,
+              advantage: c.isWhite ? (-mat.advantage).clamp(0, 1 << 30) : mat.advantage.clamp(0, 1 << 30),
               clock: _Clock(c: c, white: !c.isWhite),
             );
             final board = ChessBoardView(
@@ -269,8 +273,11 @@ class _GameScreenState extends State<GameScreen> {
             final myBar = PlayerBar(
               name: me.username,
               rating: me.rating,
+              country: me.country,
               avatar: HcAvatar(name: me.username),
               status: g.active && g.whiteToMove == c.isWhite ? 'Your move' : null,
+              captured: c.isWhite ? mat.whiteCaptured : mat.blackCaptured,
+              advantage: c.isWhite ? mat.advantage.clamp(0, 1 << 30) : (-mat.advantage).clamp(0, 1 << 30),
               clock: _Clock(c: c, white: c.isWhite),
             );
             final banners = Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [

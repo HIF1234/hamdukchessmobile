@@ -2,10 +2,13 @@ import 'package:chess/chess.dart' as ch;
 
 /// A player shown on the board.
 class Player {
-  const Player({required this.id, required this.username, required this.rating});
+  const Player({required this.id, required this.username, required this.rating, this.country});
   final String id;
   final String username;
   final int? rating;
+
+  /// ISO-3166 alpha-2, e.g. "NG" -- for the flag on the player bar.
+  final String? country;
 }
 
 /// The server's view of a game. Only the server decides legality, results and clocks.
@@ -66,7 +69,12 @@ class GameState {
 
   static Player _player(String id, Object? p) {
     final m = p is Map ? p : const {};
-    return Player(id: id, username: m['username'] as String? ?? 'Player', rating: (m['rating'] as num?)?.toInt());
+    return Player(
+      id: id,
+      username: m['username'] as String? ?? 'Player',
+      rating: (m['rating'] as num?)?.toInt(),
+      country: m['country'] as String?,
+    );
   }
 
   /// From GET /games/{id}.
@@ -128,6 +136,36 @@ class GameState {
     if (h.isEmpty) return null;
     final m = h.last as Map;
     return (m['from'] as String, m['to'] as String);
+  }
+
+  /// Captured pieces and the material count (PlayerBar's `captured`/`advantage`): what's
+  /// missing from each side versus a full set, read straight off the board in [fen].
+  /// [whiteCaptured]/[blackCaptured] are the pieces that side has captured (opponent's
+  /// colour), for display on that side's own bar; [advantage] is white's lead in points,
+  /// negative when black leads -- PlayerBar only shows it on the leading side.
+  ({List<String> whiteCaptured, List<String> blackCaptured, int advantage}) get material {
+    const start = {'P': 8, 'N': 2, 'B': 2, 'R': 2, 'Q': 1};
+    const order = ['Q', 'R', 'B', 'N', 'P']; // strongest first, matching the website
+    const values = {'P': 1, 'N': 3, 'B': 3, 'R': 5, 'Q': 9};
+    final onBoard = <String, int>{};
+    for (final ch in fen.split(' ').first.split('')) {
+      if (ch == '/' || int.tryParse(ch) != null) continue;
+      final isWhite = ch.toUpperCase() == ch;
+      final key = '${isWhite ? 'w' : 'b'}${ch.toUpperCase()}';
+      onBoard[key] = (onBoard[key] ?? 0) + 1;
+    }
+    final whiteCaptured = <String>[]; // black pieces white has taken
+    final blackCaptured = <String>[]; // white pieces black has taken
+    var whiteValue = 0, blackValue = 0;
+    for (final type in order) {
+      final blackMissing = start[type]! - (onBoard['b$type'] ?? 0);
+      final whiteMissing = start[type]! - (onBoard['w$type'] ?? 0);
+      whiteCaptured.addAll(List.filled(blackMissing, 'b$type'));
+      blackCaptured.addAll(List.filled(whiteMissing, 'w$type'));
+      whiteValue += blackMissing * values[type]!;
+      blackValue += whiteMissing * values[type]!;
+    }
+    return (whiteCaptured: whiteCaptured, blackCaptured: blackCaptured, advantage: whiteValue - blackValue);
   }
 }
 

@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import 'settings.dart';
 import 'theme.dart';
 
 // ---------------------------------------------------------------------------------------------
@@ -21,6 +22,17 @@ String hcNumber(int n) {
 
 /// A rating change for pills and rows: "+8", "−6", "+0".
 String hcDelta(int n) => n > 0 ? '+${hcNumber(n)}' : (n < 0 ? hcNumber(n) : '+0');
+
+/// "NG" -> 🇳🇬, via the regional-indicator Unicode trick (each letter offset into that
+/// block); null or malformed input shows nothing rather than a broken glyph.
+String? countryFlagEmoji(String? iso2) {
+  if (iso2 == null || iso2.length != 2) return null;
+  final upper = iso2.toUpperCase();
+  final codes = upper.codeUnits;
+  if (codes.any((c) => c < 0x41 || c > 0x5A)) return null;
+  const base = 0x1F1E6 - 0x41;
+  return String.fromCharCodes(codes.map((c) => c + base));
+}
 
 /// Naira with grouping and no kobo: 250000 kobo -> "₦2,500".
 String hcNaira(int kobo) => '₦${hcNumber((kobo / 100).round())}';
@@ -566,6 +578,7 @@ class PlayerBar extends StatelessWidget {
     required this.name,
     required this.clock,
     this.rating,
+    this.country,
     this.avatar,
     this.status,
     this.warn = false,
@@ -576,6 +589,9 @@ class PlayerBar extends StatelessWidget {
   /// Shown in DM Sans with the Noto Sans fallback; never Playfair.
   final String name;
   final int? rating;
+
+  /// ISO-3166 alpha-2; shown as a flag emoji next to the name.
+  final String? country;
 
   /// An HcAvatar; defaults to initials.
   final Widget? avatar;
@@ -598,7 +614,7 @@ class PlayerBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hc = context.hc;
-    final r = rating;
+    final r = AppSettings.instance.hideRatings ? null : rating;
     final s = status;
     return SizedBox(
       height: HcSize.playerBar,
@@ -613,7 +629,15 @@ class PlayerBar extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(name, style: HcText.titleSm.copyWith(color: hc.ink), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  Row(children: [
+                    if (countryFlagEmoji(country) != null) ...[
+                      Text(countryFlagEmoji(country)!, style: const TextStyle(fontSize: 13)),
+                      const SizedBox(width: 4),
+                    ],
+                    Flexible(
+                      child: Text(name, style: HcText.titleSm.copyWith(color: hc.ink), maxLines: 1, overflow: TextOverflow.ellipsis),
+                    ),
+                  ]),
                   DefaultTextStyle(
                     style: HcText.bodySm.copyWith(color: hc.ink2, fontFeatures: const [FontFeature.tabularFigures()]),
                     child: Row(
