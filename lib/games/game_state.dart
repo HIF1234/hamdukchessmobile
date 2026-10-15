@@ -29,6 +29,8 @@ class GameState {
     this.winnerId,
     this.drawOfferBy,
     this.takebackOfferBy,
+    this.whiteRatingDelta,
+    this.blackRatingDelta,
     this.timeControl = '',
     this.chess960 = false,
     this.rated = true,
@@ -49,6 +51,9 @@ class GameState {
   final String? winnerId;
   final String? drawOfferBy;
   final String? takebackOfferBy;
+  /// The rating change from this game, once it's rated and completed; null until then.
+  final int? whiteRatingDelta;
+  final int? blackRatingDelta;
   final String timeControl;
   final bool chess960;
   final bool rated;
@@ -96,6 +101,8 @@ class GameState {
         winnerId: j['winner_id'] as String?,
         drawOfferBy: j['draw_offer_by'] as String?,
         takebackOfferBy: j['takeback_offer_by'] as String?,
+        whiteRatingDelta: (j['white_rating_delta'] as num?)?.toInt(),
+        blackRatingDelta: (j['black_rating_delta'] as num?)?.toInt(),
         timeControl: j['time_control'] as String? ?? '',
         chess960: j['chess960_start_fen'] != null,
         rated: j['rated'] as bool? ?? true,
@@ -118,6 +125,8 @@ class GameState {
         winnerId: row['winner_id'] as String?,
         drawOfferBy: row['draw_offer_by'] as String?,
         takebackOfferBy: row['takeback_offer_by'] as String?,
+        whiteRatingDelta: (row['white_rating_delta'] as num?)?.toInt() ?? whiteRatingDelta,
+        blackRatingDelta: (row['black_rating_delta'] as num?)?.toInt() ?? blackRatingDelta,
         timeControl: timeControl,
         chess960: chess960,
         rated: rated,

@@ -140,8 +140,17 @@ class _GameScreenState extends State<GameScreen> {
 
   Future<void> _showResult(GameState g) async {
     if (!mounted) return;
+    // Ratings update after the game ends; the row this screen just saw over Realtime still
+    // has the pre-game player ratings cached, so refetch for the rating-change display below.
+    await c.reload();
+    if (!mounted) return;
+    g = c.game ?? g;
     final won = g.winnerId == widget.myId;
     final canReview = !g.chess960 && g.sanMoves.length >= 2;
+    final myDelta = c.isWhite ? g.whiteRatingDelta : g.blackRatingDelta;
+    final me = c.isWhite ? g.white : g.black;
+    final ratingBefore = myDelta == null || me.rating == null ? null : me.rating! - myDelta;
+    final ratingAfter = myDelta == null ? null : me.rating;
     _sheetOpen = true;
     await showModalBottomSheet(
       context: context,
@@ -154,6 +163,8 @@ class _GameScreenState extends State<GameScreen> {
             overline: 'Game over · ${_categoryName(g.category)} ${g.timeControl}',
             headline: _resultHeadline(g, won),
             detail: _resultDetail(g, won),
+            ratingBefore: ratingBefore,
+            ratingAfter: ratingAfter,
             actions: [
               if (c.isParticipant)
                 ListenableBuilder(
@@ -187,6 +198,14 @@ class _GameScreenState extends State<GameScreen> {
                     child: const Text('Review'),
                   ),
                 ),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () => _share(g),
+                  icon: const Icon(Icons.share_rounded),
+                  label: const Text('Share'),
+                ),
+              ),
               if (c.isParticipant)
                 SizedBox(
                   width: double.infinity,
