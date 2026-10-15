@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../auth/guest_conversion.dart';
 import '../board/chess_board.dart';
 import '../core/game_feedback.dart';
+import '../core/keep_screen_on.dart';
 import '../core/notification_prompt.dart';
 import '../core/settings.dart';
 import 'local_network.dart';
@@ -57,11 +58,13 @@ class _LocalGameScreenState extends State<LocalGameScreen> {
   @override
   void initState() {
     super.initState();
+    KeepScreenOn.push();
     _sub = widget.messages.listen(_onMessage);
   }
 
   @override
   void dispose() {
+    KeepScreenOn.pop();
     _sub?.cancel();
     super.dispose();
   }

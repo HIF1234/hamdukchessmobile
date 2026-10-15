@@ -54,6 +54,14 @@ Future<void> main() async {
   unawaited(IncomingLinks.instance.start());
   unawaited(AppShortcuts.start());
   AppLifecycleListener(onPause: () => Telemetry.sessionData(bytes: DataMeter.bytes, since: DataMeter.started));
+  // Phones stay upright so the board never becomes bigger than the screen; tablets (>=600dp
+  // shortest side, the standard Material breakpoint) keep both orientations for the side-by-
+  // side layout GameScreen switches to at that width.
+  final view = PlatformDispatcher.instance.views.first;
+  final shortestSideDp = (view.physicalSize.shortestSide / view.devicePixelRatio);
+  if (shortestSideDp < 600) {
+    await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp, DeviceOrientation.portraitDown]);
+  }
   runApp(HamdukChessApp(config: config, showOnboarding: !seenOnboarding, appVersion: appVersion));
 }
 

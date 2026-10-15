@@ -7,6 +7,7 @@ import '../auth/guest_conversion.dart';
 import '../board/chess_board.dart';
 import '../core/game_feedback.dart';
 import '../core/hc_widgets.dart';
+import '../core/keep_screen_on.dart';
 import '../core/notification_prompt.dart';
 import '../core/settings.dart';
 import '../core/telemetry.dart';
@@ -54,6 +55,7 @@ class _BotGameScreenState extends State<BotGameScreen> {
   @override
   void initState() {
     super.initState();
+    KeepScreenOn.push();
     final initial = widget.initialSanMoves;
     if (initial != null) {
       for (final san in initial) {
@@ -88,6 +90,7 @@ class _BotGameScreenState extends State<BotGameScreen> {
 
   @override
   void dispose() {
+    KeepScreenOn.pop();
     _engine?.dispose();
     super.dispose();
   }

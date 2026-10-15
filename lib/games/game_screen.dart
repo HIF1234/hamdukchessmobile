@@ -4,6 +4,7 @@ import 'package:share_plus/share_plus.dart';
 import '../board/chess_board.dart';
 import '../core/active_game.dart';
 import '../core/hc_widgets.dart';
+import '../core/keep_screen_on.dart';
 import '../core/notification_prompt.dart';
 import '../core/report_dialog.dart';
 import '../core/settings.dart';
@@ -35,6 +36,7 @@ class _GameScreenState extends State<GameScreen> {
   @override
   void initState() {
     super.initState();
+    KeepScreenOn.push();
     c.start();
     c.addListener(_onControllerChanged);
   }
@@ -65,6 +67,7 @@ class _GameScreenState extends State<GameScreen> {
 
   @override
   void dispose() {
+    KeepScreenOn.pop();
     c.removeListener(_onControllerChanged);
     c.dispose();
     super.dispose();
@@ -238,74 +241,107 @@ class _GameScreenState extends State<GameScreen> {
             final me = c.isWhite ? g.white : g.black;
             final opp = c.opponent!;
             final spectating = !c.isParticipant;
+
+            final moveList = MoveListRibbon(san: g.sanMoves, current: g.sanMoves.isEmpty ? -1 : g.sanMoves.length - 1);
+            final opponentBar = PlayerBar(
+              name: opp.username,
+              rating: opp.rating,
+              avatar: HcAvatar(name: opp.username),
+              status: switch (c.opponentPresence) {
+                OpponentPresence.reconnecting => 'Disconnected, reconnecting…',
+                OpponentPresence.abandoned => 'Left the game',
+                OpponentPresence.connected => g.active && g.whiteToMove != c.isWhite ? 'Thinking…' : null,
+              },
+              warn: c.opponentPresence != OpponentPresence.connected,
+              clock: _Clock(c: c, white: !c.isWhite),
+            );
+            final board = ChessBoardView(
+              fen: c.boardFen,
+              whiteAtBottom: c.isWhite != _flipped,
+              lastMove: c.pending != null ? (c.pending!.from, c.pending!.to) : g.lastMove,
+              playerColor: c.isWhite ? 'w' : 'b',
+              onMove: g.active ? c.play : null,
+              onPremove: g.active ? c.setPremove : null,
+              onCancelPremove: c.cancelPremove,
+              premove: c.premove == null ? null : (c.premove!.$1, c.premove!.$2),
+              animate: !AppSettings.instance.lowData,
+            );
+            final myBar = PlayerBar(
+              name: me.username,
+              rating: me.rating,
+              avatar: HcAvatar(name: me.username),
+              status: g.active && g.whiteToMove == c.isWhite ? 'Your move' : null,
+              clock: _Clock(c: c, white: c.isWhite),
+            );
+            final banners = Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              if (!c.connected)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: HcSpace.s2),
+                  child: HcBanner(icon: Icons.cloud_off_rounded, text: 'Connection lost. Reconnecting…', tone: HcBannerTone.error),
+                ),
+              if (c.isParticipant && c.opponentPresence == OpponentPresence.abandoned && g.active)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: HcSpace.s2),
+                  child: HcBanner(
+                    icon: Icons.person_off_rounded,
+                    text: '${opp.username} has been away for over ${disconnectGrace.inSeconds}s.',
+                    tone: HcBannerTone.error,
+                    actions: [FilledButton(style: HcButtons.small(), onPressed: c.claimAbandoned, child: const Text('Claim the game'))],
+                  ),
+                ),
+              if (c.isParticipant && g.active && g.drawOfferBy != null && g.drawOfferBy != widget.myId)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: HcSpace.s2),
+                  child: HcBanner(
+                    icon: Icons.handshake_rounded,
+                    text: '${opp.username} offers a draw',
+                    tone: HcBannerTone.offer,
+                    actions: [
+                      FilledButton(style: HcButtons.small(), onPressed: () => c.answerDraw(true), child: const Text('Accept')),
+                      TextButton(style: HcButtons.small(), onPressed: () => c.answerDraw(false), child: const Text('Decline')),
+                    ],
+                  ),
+                ),
+              if (spectating) Text('Spectating', textAlign: TextAlign.center, style: HcText.bodySm.copyWith(color: hc.ink2)),
+            ]);
+
+            // Tablets (>=600dp shortest side) get the board on the left, clocks/moves on the
+            // right, in either orientation; phones keep the stacked layout, locked to portrait.
+            if (MediaQuery.sizeOf(context).shortestSide >= 600) {
+              return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Expanded(
+                  flex: 3,
+                  child: Column(children: [
+                    opponentBar,
+                    Expanded(child: Center(child: AspectRatio(aspectRatio: 1, child: board))),
+                    myBar,
+                  ]),
+                ),
+                SizedBox(
+                  width: 320,
+                  child: Column(children: [
+                    moveList,
+                    Expanded(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.all(HcSpace.s4),
+                        child: banners,
+                      ),
+                    ),
+                  ]),
+                ),
+              ]);
+            }
             return Column(
               children: [
-                MoveListRibbon(san: g.sanMoves, current: g.sanMoves.isEmpty ? -1 : g.sanMoves.length - 1),
+                moveList,
                 const SizedBox(height: HcSpace.s2),
-                PlayerBar(
-                  name: opp.username,
-                  rating: opp.rating,
-                  avatar: HcAvatar(name: opp.username),
-                  status: switch (c.opponentPresence) {
-                    OpponentPresence.reconnecting => 'Disconnected, reconnecting…',
-                    OpponentPresence.abandoned => 'Left the game',
-                    OpponentPresence.connected => g.active && g.whiteToMove != c.isWhite ? 'Thinking…' : null,
-                  },
-                  warn: c.opponentPresence != OpponentPresence.connected,
-                  clock: _Clock(c: c, white: !c.isWhite),
-                ),
-                ChessBoardView(
-                  fen: c.boardFen,
-                  whiteAtBottom: c.isWhite != _flipped,
-                  lastMove: c.pending != null ? (c.pending!.from, c.pending!.to) : g.lastMove,
-                  playerColor: c.isWhite ? 'w' : 'b',
-                  onMove: g.active ? c.play : null,
-                  onPremove: g.active ? c.setPremove : null,
-                  onCancelPremove: c.cancelPremove,
-                  premove: c.premove == null ? null : (c.premove!.$1, c.premove!.$2),
-                  animate: !AppSettings.instance.lowData,
-                ),
-                PlayerBar(
-                  name: me.username,
-                  rating: me.rating,
-                  avatar: HcAvatar(name: me.username),
-                  status: g.active && g.whiteToMove == c.isWhite ? 'Your move' : null,
-                  clock: _Clock(c: c, white: c.isWhite),
-                ),
+                opponentBar,
+                board,
+                myBar,
                 Expanded(
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.symmetric(horizontal: HcSpace.s4, vertical: HcSpace.s3),
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                      if (!c.connected)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: HcSpace.s2),
-                          child: HcBanner(icon: Icons.cloud_off_rounded, text: 'Connection lost. Reconnecting…', tone: HcBannerTone.error),
-                        ),
-                      if (c.isParticipant && c.opponentPresence == OpponentPresence.abandoned && g.active)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: HcSpace.s2),
-                          child: HcBanner(
-                            icon: Icons.person_off_rounded,
-                            text: '${opp.username} has been away for over ${disconnectGrace.inSeconds}s.',
-                            tone: HcBannerTone.error,
-                            actions: [FilledButton(style: HcButtons.small(), onPressed: c.claimAbandoned, child: const Text('Claim the game'))],
-                          ),
-                        ),
-                      if (c.isParticipant && g.active && g.drawOfferBy != null && g.drawOfferBy != widget.myId)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: HcSpace.s2),
-                          child: HcBanner(
-                            icon: Icons.handshake_rounded,
-                            text: '${opp.username} offers a draw',
-                            tone: HcBannerTone.offer,
-                            actions: [
-                              FilledButton(style: HcButtons.small(), onPressed: () => c.answerDraw(true), child: const Text('Accept')),
-                              TextButton(style: HcButtons.small(), onPressed: () => c.answerDraw(false), child: const Text('Decline')),
-                            ],
-                          ),
-                        ),
-                      if (spectating) Text('Spectating', textAlign: TextAlign.center, style: HcText.bodySm.copyWith(color: hc.ink2)),
-                    ]),
+                    child: banners,
                   ),
                 ),
               ],

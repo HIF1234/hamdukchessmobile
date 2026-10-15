@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../board/chess_board.dart';
 import '../core/hc_widgets.dart';
+import '../core/keep_screen_on.dart';
 import '../core/settings.dart';
 import '../core/telemetry.dart';
 import '../engine/device.dart';
@@ -32,6 +33,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
   @override
   void initState() {
     super.initState();
+    KeepScreenOn.push();
     _run();
   }
 
@@ -60,6 +62,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
 
   @override
   void dispose() {
+    KeepScreenOn.pop();
     _cancelled = true;
     _engine?.dispose();
     super.dispose();
