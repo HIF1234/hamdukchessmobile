@@ -229,7 +229,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   HcListRow(
                     title: 'Chess title',
-                    subtitle: _fideTitles[account?['fideTitle'] as String?] ?? "I don't have one",
+                    subtitle: switch ((account?['fideTitle'] as String?, account?['fideTitleVerified'] as bool?)) {
+                      (null, _) => "I don't have one",
+                      (final t, true) => '${_fideTitles[t]} · verified',
+                      (final t, _) => '${_fideTitles[t]} · pending verification',
+                    },
                     onTap: () => _editFideTitle(context),
                   ),
                   HcListRow(
@@ -361,9 +365,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     'WNM': 'Woman National Master',
   };
 
-  /// Self-reported, like country/state: restricted to the real title abbreviations, not
-  /// free text, but not checked against a live FIDE database either -- trust-based, same as
-  /// every other self-reported profile field here.
+  /// Self-reported like country/state, restricted to the real title abbreviations -- but
+  /// unlike country/state this claim doesn't show on a player bar until Hamduk staff verify
+  /// the FIDE id given here against FIDE's own public ratings list, same idea as chess.com's
+  /// title verification (minus the ID-document upload).
   Future<void> _editFideTitle(BuildContext context) async {
     final current = _me?['account']?['fideTitle'] as String?;
     final chosen = await showModalBottomSheet<String>(
@@ -389,12 +394,50 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
     );
     if (chosen == null || chosen == (current ?? '')) return;
+    if (chosen.isEmpty) {
+      try {
+        await Api.instance.patch('/account', {'fideTitle': null});
+        await _load();
+      } on ApiError catch (e) {
+        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      }
+      return;
+    }
+    if (!context.mounted) return;
+    final fideId = await _askFideId(context, chosen);
+    if (fideId == null) return; // cancelled; title not saved without at least trying for an id
     try {
-      await Api.instance.patch('/account', {'fideTitle': chosen.isEmpty ? null : chosen});
+      await Api.instance.patch('/account', {'fideTitle': chosen, 'fideId': fideId.isEmpty ? null : fideId});
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Submitted for verification. It will show once staff confirm it.')),
+        );
+      }
       await _load();
     } on ApiError catch (e) {
       if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
     }
+  }
+
+  /// Asks for the FIDE id staff will check the claim against (ratings.fide.com); not
+  /// required, but a claim with nothing to check is unlikely to ever get verified.
+  Future<String?> _askFideId(BuildContext context, String title) async {
+    final controller = TextEditingController(text: _me?['account']?['fideId'] as String? ?? '');
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('$title — FIDE id'),
+        content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('Staff check this against ratings.fide.com before the title shows to anyone else.'),
+          const SizedBox(height: 12),
+          TextField(controller: controller, decoration: const InputDecoration(labelText: 'FIDE id (optional)')),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, controller.text.trim()), child: const Text('Submit')),
+        ],
+      ),
+    );
   }
 
   Future<void> _signOut(BuildContext context) async {
