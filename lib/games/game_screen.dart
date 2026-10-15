@@ -103,10 +103,38 @@ class _GameScreenState extends State<GameScreen> {
     if (ok == true) await c.abort();
   }
 
-  void _share(GameState g) {
-    SharePlus.instance.share(
-      ShareParams(text: 'Watch my game on Hamduk Chess: https://play.chess.hamduk.com.ng/play/${g.id}'),
+  Future<void> _share(GameState g) async {
+    final hasPgn = g.pgn != null && g.pgn!.isNotEmpty;
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.link_rounded),
+              title: const Text('Share link'),
+              onTap: () => Navigator.pop(ctx, 'link'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.description_rounded),
+              title: const Text('Share PGN'),
+              enabled: hasPgn,
+              subtitle: hasPgn ? null : const Text('No moves yet'),
+              onTap: () => Navigator.pop(ctx, 'pgn'),
+            ),
+          ],
+        ),
+      ),
     );
+    if (choice == 'pgn' && hasPgn) {
+      await SharePlus.instance.share(ShareParams(text: g.pgn!));
+    } else if (choice == 'link') {
+      await SharePlus.instance.share(
+        ShareParams(text: 'Watch my game on Hamduk Chess: https://play.chess.hamduk.com.ng/play/${g.id}'),
+      );
+    }
   }
 
   Future<void> _report(GameState g) async {
