@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hamduk_chess/board/chess_board.dart';
 
@@ -112,6 +113,36 @@ void main() {
     );
     await tap(t, 'd5');
     expect(cancelled, isTrue);
+  });
+
+  testWidgets('every square has a semantics label for the screen reader', (t) async {
+    final handle = t.ensureSemantics();
+    final moves = <String>[];
+    await pump(t, ChessBoardView(fen: start, playerColor: 'w', onMove: record(moves)));
+    expect(find.bySemanticsLabel('e2, white Pawn'), findsOneWidget);
+    expect(find.bySemanticsLabel('e4, empty'), findsOneWidget);
+    handle.dispose();
+  });
+
+  testWidgets('a king in check is called out in its square label', (t) async {
+    final handle = t.ensureSemantics();
+    // White king on e1 in check from the black queen on e8.
+    const fen = '4q3/8/8/8/8/8/8/4K3 w - - 0 1';
+    await pump(t, ChessBoardView(fen: fen, playerColor: 'w', onMove: (f, to, p) => true));
+    expect(find.bySemanticsLabel('e1, white King, in check'), findsOneWidget);
+    handle.dispose();
+  });
+
+  testWidgets('a move is announced to the screen reader in words', (t) async {
+    final events = <Map<Object?, Object?>>[];
+    t.binding.defaultBinaryMessenger.setMockDecodedMessageHandler<dynamic>(SystemChannels.accessibility, (message) async {
+      events.add(message as Map<Object?, Object?>);
+      return null;
+    });
+    await pump(t, ChessBoardView(fen: start, playerColor: 'w', lastMoveSan: null));
+    expect(events, isEmpty);
+    await pump(t, ChessBoardView(fen: afterE4, playerColor: 'w', lastMoveSan: 'Nf3'));
+    expect(events.any((e) => e['type'] == 'announce' && (e['data'] as Map)['message'] == 'Knight to f3'), isTrue);
   });
 
   testWidgets('puzzles (no player colour) move whichever side is to play', (t) async {

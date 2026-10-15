@@ -340,6 +340,7 @@ class _GameScreenState extends State<GameScreen> {
               onCancelPremove: c.cancelPremove,
               premoveQueue: [for (final p in c.premoveQueue) (p.$1, p.$2)],
               animate: !AppSettings.instance.lowData,
+              lastMoveSan: lookingBack || g.sanMoves.isEmpty ? null : g.sanMoves.last,
             );
             final myBar = PlayerBar(
               name: me.username,

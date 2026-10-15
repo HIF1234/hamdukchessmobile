@@ -1,11 +1,16 @@
 import 'package:chess/chess.dart' as ch;
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../core/settings.dart';
 import '../core/theme.dart';
+import 'move_announcer.dart';
 
 const _slide = Duration(milliseconds: 120);
+
+/// Every square, a8 to h1 (reading order for the screen reader).
+final _allSquares = [for (var rank = 8; rank >= 1; rank--) for (final file in 'abcdefgh'.split('')) '$file$rank'];
 
 /// Called when the player tries a move. Return true if it was accepted.
 typedef MoveHandler = bool Function(String from, String to, String? promotion);
@@ -30,6 +35,7 @@ class ChessBoardView extends StatefulWidget {
     this.premoveQueue = const [],
     this.animate = true,
     this.arrow,
+    this.lastMoveSan,
   });
 
   final String fen;
@@ -56,6 +62,9 @@ class ChessBoardView extends StatefulWidget {
   /// A move to draw as an arrow (e.g. the second-tier puzzle hint).
   final (String, String)? arrow;
 
+  /// The last move in SAN (e.g. "Nxe5+"), announced to the screen reader when it changes.
+  final String? lastMoveSan;
+
   @override
   State<ChessBoardView> createState() => _ChessBoardViewState();
 }
@@ -75,6 +84,9 @@ class _ChessBoardViewState extends State<ChessBoardView> with SingleTickerProvid
   @override
   void didUpdateWidget(ChessBoardView old) {
     super.didUpdateWidget(old);
+    if (widget.lastMoveSan != null && widget.lastMoveSan != old.lastMoveSan) {
+      SemanticsService.sendAnnouncement(View.of(context), announceSan(widget.lastMoveSan!), TextDirection.ltr);
+    }
     if (old.fen != widget.fen) {
       _clearSelection();
       // Slide the piece that just moved, unless the player dropped it there by hand.
@@ -210,9 +222,14 @@ class _ChessBoardViewState extends State<ChessBoardView> with SingleTickerProvid
   }
 
   void _onTap(Offset p, double size) {
-    if (widget.onMove == null && widget.onPremove == null) return;
     final sq = _squareAt(p, size);
     if (sq == null) return;
+    _handleSquareTap(sq);
+  }
+
+  /// Shared by raw taps/drags and the screen reader's per-square semantics actions.
+  void _handleSquareTap(String sq) {
+    if (widget.onMove == null && widget.onPremove == null) return;
     if (_selectedSq != null && _targets.contains(sq)) {
       _tryMove(_selectedSq!, sq);
     } else if (_canPick(sq) && sq != _selectedSq) {
@@ -221,6 +238,20 @@ class _ChessBoardViewState extends State<ChessBoardView> with SingleTickerProvid
       if (widget.premoveQueue.isNotEmpty && _selectedSq == null) widget.onCancelPremove?.call();
       setState(_clearSelection);
     }
+  }
+
+  /// "e4, white knight" / "e4, empty, last move" -- for the screen reader; sighted play
+  /// never shows this text.
+  String _squareSemanticsLabel(String square, {required bool inCheck}) {
+    final piece = _pieces[square];
+    final what = piece == null ? 'empty' : '${piece[0] == 'w' ? 'white' : 'black'} ${pieceName(piece[1])}';
+    final tags = <String>[];
+    if (widget.lastMove != null && (square == widget.lastMove!.$1 || square == widget.lastMove!.$2)) {
+      tags.add('last move');
+    }
+    if (square == _selectedSq) tags.add('selected');
+    if (inCheck) tags.add('in check');
+    return [square, what, ...tags].join(', ');
   }
 
   @override
@@ -232,6 +263,14 @@ class _ChessBoardViewState extends State<ChessBoardView> with SingleTickerProvid
         final size = c.maxWidth;
         final sq = size / 8;
         final pieces = _pieces;
+        // The king of the side to move, if it's in check -- for that square's semantics
+        // label; the visual check glow isn't built yet, this only feeds the screen reader.
+        String? checkedKingSquare;
+        if (ch.Chess.fromFEN(widget.fen, check_validity: false).in_check) {
+          final toMove = _toMove;
+          checkedKingSquare = pieces.entries.firstWhere((e) => e.value == '${toMove}K', orElse: () => const MapEntry('', '')).key;
+          if (checkedKingSquare.isEmpty) checkedKingSquare = null;
+        }
         return GestureDetector(
           onTapUp: _promoFrom != null ? null : (d) => _onTap(d.localPosition, size),
           onPanStart: _promoFrom != null || (widget.onMove == null && widget.onPremove == null)
@@ -330,6 +369,17 @@ class _ChessBoardViewState extends State<ChessBoardView> with SingleTickerProvid
                 boardSize: size,
                 onPick: _choosePromotion,
                 onCancel: _cancelPromotion,
+              ),
+            // Invisible per-square semantics nodes for the screen reader: raw touch isn't
+            // affected, since Semantics.onTap only fires from the accessibility bridge.
+            for (final square in _allSquares)
+              Positioned.fromRect(
+                rect: _origin(square, size) & Size.square(sq),
+                child: Semantics(
+                  label: _squareSemanticsLabel(square, inCheck: square == checkedKingSquare),
+                  button: widget.onMove != null || widget.onPremove != null,
+                  onTap: widget.onMove == null && widget.onPremove == null ? null : () => _handleSquareTap(square),
+                ),
               ),
           ]),
         );
