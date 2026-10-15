@@ -28,6 +28,7 @@ class GameState {
     this.endReason,
     this.winnerId,
     this.drawOfferBy,
+    this.takebackOfferBy,
     this.timeControl = '',
     this.chess960 = false,
     this.rated = true,
@@ -47,6 +48,7 @@ class GameState {
   final String? endReason;
   final String? winnerId;
   final String? drawOfferBy;
+  final String? takebackOfferBy;
   final String timeControl;
   final bool chess960;
   final bool rated;
@@ -93,6 +95,7 @@ class GameState {
         endReason: j['end_reason'] as String?,
         winnerId: j['winner_id'] as String?,
         drawOfferBy: j['draw_offer_by'] as String?,
+        takebackOfferBy: j['takeback_offer_by'] as String?,
         timeControl: j['time_control'] as String? ?? '',
         chess960: j['chess960_start_fen'] != null,
         rated: j['rated'] as bool? ?? true,
@@ -114,6 +117,7 @@ class GameState {
         endReason: row['end_reason'] as String?,
         winnerId: row['winner_id'] as String?,
         drawOfferBy: row['draw_offer_by'] as String?,
+        takebackOfferBy: row['takeback_offer_by'] as String?,
         timeControl: timeControl,
         chess960: chess960,
         rated: rated,
@@ -125,6 +129,20 @@ class GameState {
     final g = ch.Chess();
     if (!g.load_pgn(pgn)) return const [];
     return g.getHistory().cast<String>();
+  }
+
+  /// The position after the first [ply] moves (for move-list look-back); -1 is the
+  /// starting position. Falls back to the starting FEN when there's no PGN to replay.
+  String fenAtPly(int ply) {
+    const startFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+    if (pgn == null || pgn!.isEmpty) return startFen;
+    final g = ch.Chess();
+    if (!g.load_pgn(pgn)) return startFen;
+    final total = sanMoves.length;
+    for (var i = total - 1; i > ply; i--) {
+      g.undo_move();
+    }
+    return g.fen;
   }
 
   /// The last move, for highlighting, read from the PGN.

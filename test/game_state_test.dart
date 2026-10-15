@@ -90,6 +90,19 @@ void main() {
     expect(game(pgn: null).lastMove, isNull);
   });
 
+  group('fenAtPly (move-list look-back)', () {
+    test('replays the PGN up to and including the given ply', () {
+      final g = game(pgn: '1. e4 e5 2. Nf3');
+      expect(g.fenAtPly(-1).split(' ').first, start.split(' ').first);
+      expect(g.fenAtPly(0).split(' ').first, 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR');
+      expect(g.fenAtPly(2).split(' ').first, 'rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R');
+    });
+
+    test('falls back to the starting position without a PGN', () {
+      expect(game(pgn: null).fenAtPly(0).split(' ').first, start.split(' ').first);
+    });
+  });
+
   group('material', () {
     test('the starting position has no captures and no advantage', () {
       final m = game().material;

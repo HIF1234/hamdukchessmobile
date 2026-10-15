@@ -32,6 +32,7 @@ class _GameScreenState extends State<GameScreen> {
   String? _resultShownFor;
   bool _sheetOpen = false;
   bool _flipped = false;
+  int? _lookBackPly;
 
   @override
   void initState() {
@@ -85,6 +86,21 @@ class _GameScreenState extends State<GameScreen> {
       ),
     );
     if (ok == true) await c.resign();
+  }
+
+  Future<void> _confirmAbort() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Abort this game?'),
+        content: const Text('No result is recorded for either player.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Keep playing')),
+          FilledButton(style: HcButtons.danger(ctx), onPressed: () => Navigator.pop(ctx, true), child: const Text('Abort')),
+        ],
+      ),
+    );
+    if (ok == true) await c.abort();
   }
 
   void _share(GameState g) {
@@ -242,7 +258,13 @@ class _GameScreenState extends State<GameScreen> {
             final opp = c.opponent!;
             final spectating = !c.isParticipant;
 
-            final moveList = MoveListRibbon(san: g.sanMoves, current: g.sanMoves.isEmpty ? -1 : g.sanMoves.length - 1);
+            final lastPly = g.sanMoves.length - 1;
+            final lookingBack = _lookBackPly != null && _lookBackPly! < lastPly;
+            final moveList = MoveListRibbon(
+              san: g.sanMoves,
+              current: _lookBackPly ?? lastPly,
+              onTap: g.sanMoves.isEmpty ? null : (i) => setState(() => _lookBackPly = i == lastPly ? null : i),
+            );
             final mat = g.material;
             final opponentBar = PlayerBar(
               name: opp.username,
@@ -260,12 +282,14 @@ class _GameScreenState extends State<GameScreen> {
               clock: _Clock(c: c, white: !c.isWhite),
             );
             final board = ChessBoardView(
-              fen: c.boardFen,
+              fen: lookingBack ? g.fenAtPly(_lookBackPly!) : c.boardFen,
               whiteAtBottom: c.isWhite != _flipped,
-              lastMove: c.pending != null ? (c.pending!.from, c.pending!.to) : g.lastMove,
+              lastMove: lookingBack
+                  ? null
+                  : (c.pending != null ? (c.pending!.from, c.pending!.to) : g.lastMove),
               playerColor: c.isWhite ? 'w' : 'b',
-              onMove: g.active ? c.play : null,
-              onPremove: g.active ? c.setPremove : null,
+              onMove: !lookingBack && g.active ? c.play : null,
+              onPremove: !lookingBack && g.active ? c.setPremove : null,
               onCancelPremove: c.cancelPremove,
               premove: c.premove == null ? null : (c.premove!.$1, c.premove!.$2),
               animate: !AppSettings.instance.lowData,
@@ -281,6 +305,35 @@ class _GameScreenState extends State<GameScreen> {
               clock: _Clock(c: c, white: c.isWhite),
             );
             final banners = Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              if (lookingBack)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: HcSpace.s2),
+                  child: HcBanner(
+                    icon: Icons.history_rounded,
+                    text: 'Looking back at move ${_lookBackPly! + 1}',
+                    tone: HcBannerTone.offer,
+                    actions: [
+                      FilledButton(
+                        style: HcButtons.small(),
+                        onPressed: () => setState(() => _lookBackPly = null),
+                        child: const Text('Back to game'),
+                      ),
+                    ],
+                  ),
+                ),
+              if (c.isParticipant && g.active && g.takebackOfferBy != null && g.takebackOfferBy != widget.myId)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: HcSpace.s2),
+                  child: HcBanner(
+                    icon: Icons.undo_rounded,
+                    text: '${opp.username} asks for a takeback',
+                    tone: HcBannerTone.offer,
+                    actions: [
+                      FilledButton(style: HcButtons.small(), onPressed: () => c.answerTakeback(true), child: const Text('Accept')),
+                      TextButton(style: HcButtons.small(), onPressed: () => c.answerTakeback(false), child: const Text('Decline')),
+                    ],
+                  ),
+                ),
               if (!c.connected)
                 Padding(
                   padding: const EdgeInsets.only(bottom: HcSpace.s2),
@@ -363,13 +416,24 @@ class _GameScreenState extends State<GameScreen> {
           if (g == null) return const SizedBox.shrink();
           final opp = c.opponent;
           if (c.isParticipant && g.active) {
+            final canAbort = g.ply < 6;
+            final canTakeback = !g.rated && g.ply > 0;
             return GameActionBar(actions: [
               GameAction(
                 icon: Icons.handshake_rounded,
                 label: g.drawOfferBy == widget.myId ? 'Draw offered' : 'Offer draw',
                 onTap: g.drawOfferBy == widget.myId ? null : c.offerDraw,
               ),
-              GameAction(icon: Icons.flag_rounded, label: 'Resign', onTap: _confirmResign),
+              if (canAbort)
+                GameAction(icon: Icons.close_rounded, label: 'Abort', onTap: _confirmAbort)
+              else
+                GameAction(icon: Icons.flag_rounded, label: 'Resign', onTap: _confirmResign),
+              if (canTakeback)
+                GameAction(
+                  icon: Icons.undo_rounded,
+                  label: g.takebackOfferBy == widget.myId ? 'Takeback asked' : 'Takeback',
+                  onTap: g.takebackOfferBy != null ? null : c.requestTakeback,
+                ),
               GameAction(icon: Icons.swap_vert_rounded, label: 'Flip', onTap: () => setState(() => _flipped = !_flipped)),
               GameAction(
                 icon: Icons.chat_bubble_rounded,

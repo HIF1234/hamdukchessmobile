@@ -351,6 +351,9 @@ class GameController extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> resign() => _action('/games/$gameId/resign');
   Future<void> offerDraw() => _action('/games/$gameId/draw');
   Future<void> answerDraw(bool accept) => _action('/games/$gameId/draw', {'accept': accept});
+  Future<void> abort() => _action('/games/$gameId/abort');
+  Future<void> requestTakeback() => _action('/games/$gameId/takeback');
+  Future<void> answerTakeback(bool accept) => _action('/games/$gameId/takeback', {'accept': accept});
 
   /// Offers a rematch, or accepts the opponent's pending offer, swapping colours either way.
   Future<void> offerOrAcceptRematch() async {
