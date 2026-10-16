@@ -32,6 +32,10 @@ class PuzzleSession {
   (String, String)? lastMove;
   String? lastSan;
 
+  /// The solver's own moves so far, as "e2e4"-style UCI -- for Puzzle Battle, which has the
+  /// server re-check them against the solution (anti-cheat) rather than trusting a result.
+  final List<String> myMoves = [];
+
   // 0 = no hint shown for the current move, 1 = source square, 2 = full move as an arrow.
   // Resets to 0 on each move; maxHintLevel (0-2) is the highest reached in the whole
   // puzzle and is what the server uses to dampen the rating gain on solve.
@@ -64,6 +68,7 @@ class PuzzleSession {
     if (!legal) return false;
     lastMove = (from, to);
     lastSan = _game.getHistory().cast<String>().last;
+    myMoves.add('$from$to');
     final correct = expected.substring(0, 2) == from &&
         expected.substring(2, 4) == to &&
         (expPromo == null || promotion == null || promotion == expPromo);

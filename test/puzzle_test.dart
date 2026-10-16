@@ -64,6 +64,14 @@ void main() {
       s.tryMove('a7', 'a8', 'q');
       expect(s.status, PuzzleStatus.solved);
     });
+
+    test('myMoves records the solver\'s own moves, for Puzzle Battle to re-check server-side', () {
+      final s = PuzzleSession(fork);
+      s.tryMove('d5', 'c7');
+      s.playReply();
+      s.tryMove('c7', 'a8');
+      expect(s.myMoves, ['d5c7', 'c7a8']); // the scripted reply isn't included
+    });
   });
 
   group('PuzzleStore (offline)', () {

@@ -7,6 +7,7 @@ import '../core/hc_widgets.dart';
 import '../core/settings.dart';
 import '../core/telemetry.dart';
 import '../core/theme.dart';
+import 'battle_lobby_screen.dart';
 import 'puzzle_session.dart';
 import 'puzzle_store.dart';
 import 'storm_screen.dart';
@@ -173,6 +174,11 @@ class _PuzzlesScreenState extends State<PuzzlesScreen> {
                     icon: const Icon(Icons.bolt_rounded, color: HcColors.onForest),
                     tooltip: 'Puzzle Storm',
                     onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const StormScreen())),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.sports_kabaddi_rounded, color: HcColors.onForest),
+                    tooltip: 'Puzzle Battle',
+                    onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const BattleLobbyScreen())),
                   ),
                   IconButton(
                     icon: const Icon(Icons.insights_rounded, color: HcColors.onForest),
