@@ -9,6 +9,7 @@ import '../core/telemetry.dart';
 import '../core/theme.dart';
 import 'puzzle_session.dart';
 import 'puzzle_store.dart';
+import 'theme_stats_screen.dart';
 
 /// Rated puzzles that work offline: solve from the downloaded pack; results upload when
 /// the phone is back online.
@@ -163,7 +164,15 @@ class _PuzzlesScreenState extends State<PuzzlesScreen> {
               children: [
                 Row(children: [
                   Expanded(child: HeroCard.overline('Puzzle rating')),
-                  if (_streak > 0) HcBadge.onHero('$_streak day streak', icon: Icons.local_fire_department_rounded),
+                  if (_streak > 0) ...[
+                    HcBadge.onHero('$_streak day streak', icon: Icons.local_fire_department_rounded),
+                    const SizedBox(width: HcSpace.s2),
+                  ],
+                  IconButton(
+                    icon: const Icon(Icons.insights_rounded, color: HcColors.onForest),
+                    tooltip: 'Stats by theme',
+                    onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ThemeStatsScreen())),
+                  ),
                 ]),
                 const SizedBox(height: HcSpace.s1),
                 Text(
