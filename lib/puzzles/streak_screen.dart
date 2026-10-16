@@ -7,9 +7,9 @@ import '../core/settings.dart';
 import '../core/theme.dart';
 import 'puzzle_session.dart';
 
-/// No timer: puzzles get progressively harder, one miss ends the run. Free for everyone
-/// (unlike Puzzle Storm). A genuinely new feature -- nothing like this exists on the
-/// website yet either, so there was no behaviour to mirror here.
+/// No timer: puzzles get progressively harder, three misses end the run. Free for everyone
+/// (unlike Puzzle Storm). Mirrors chess.com's Puzzle Rush "Survival" mode: no clock,
+/// difficulty climbs, and the run survives up to 3 wrong answers before it's over.
 class StreakScreen extends StatefulWidget {
   const StreakScreen({super.key});
 
@@ -24,9 +24,13 @@ class _StreakScreenState extends State<StreakScreen> {
   String? _error;
   List<Puzzle> _puzzles = [];
   int _idx = 0;
+  int _solved = 0;
+  int _misses = 0;
   PuzzleSession? _session;
   int? _personalBest;
   int _finalStreak = 0;
+
+  static const maxMisses = 3;
 
   @override
   void initState() {
@@ -61,6 +65,8 @@ class _StreakScreenState extends State<StreakScreen> {
       setState(() {
         _puzzles = puzzles;
         _idx = 0;
+        _solved = 0;
+        _misses = 0;
         _session = PuzzleSession(puzzles.first);
         _phase = _Phase.running;
       });
@@ -79,35 +85,42 @@ class _StreakScreenState extends State<StreakScreen> {
       Future.delayed(const Duration(milliseconds: 300), () {
         if (!mounted) return;
         setState(s.playReply);
-        if (s.status == PuzzleStatus.solved) _advance();
-        if (s.status == PuzzleStatus.failed) _end();
+        if (s.status == PuzzleStatus.solved) _advance(solved: true);
+        if (s.status == PuzzleStatus.failed) _advance(solved: false);
       });
     } else if (s.status == PuzzleStatus.solved) {
       Future.delayed(const Duration(milliseconds: 300), () {
-        if (mounted) _advance();
+        if (mounted) _advance(solved: true);
       });
     } else if (s.status == PuzzleStatus.failed) {
       Future.delayed(const Duration(milliseconds: 500), () {
-        if (mounted) _end();
+        if (mounted) _advance(solved: false);
       });
     }
     return true;
   }
 
-  void _advance() {
+  void _advance({required bool solved}) {
     if (_phase != _Phase.running) return;
     setState(() {
+      if (solved) {
+        _solved++;
+      } else {
+        _misses++;
+      }
       _idx++;
       if (_idx < _puzzles.length) {
         _session = PuzzleSession(_puzzles[_idx]);
       }
     });
-    if (_idx >= _puzzles.length) _end(); // ran out of harder puzzles to offer
+    // Ends on the 3rd miss (matches chess.com's Survival mode) or when the puzzle
+    // stream runs out of harder puzzles to offer.
+    if (_misses >= maxMisses || _idx >= _puzzles.length) _end();
   }
 
   Future<void> _end() async {
     if (_phase != _Phase.running) return;
-    final streak = _idx; // puzzles solved before the miss (or before running out)
+    final streak = _solved;
     setState(() {
       _finalStreak = streak;
       _phase = _Phase.ended;
@@ -145,7 +158,7 @@ class _StreakScreenState extends State<StreakScreen> {
         const SizedBox(height: HcSpace.s3),
         Text('No clock. Puzzles get harder each time.', style: HcText.titleMd.copyWith(color: hc.ink), textAlign: TextAlign.center),
         const SizedBox(height: HcSpace.s1),
-        Text('One miss ends the run -- how far can you go?', style: HcText.bodySm.copyWith(color: hc.ink2), textAlign: TextAlign.center),
+        Text('3 misses end the run -- how far can you go?', style: HcText.bodySm.copyWith(color: hc.ink2), textAlign: TextAlign.center),
         const SizedBox(height: HcSpace.s4),
         if (_personalBest != null && _personalBest! > 0)
           Padding(
@@ -168,9 +181,9 @@ class _StreakScreenState extends State<StreakScreen> {
       Padding(
         padding: const EdgeInsets.fromLTRB(HcSpace.s4, HcSpace.s3, HcSpace.s4, HcSpace.s3),
         child: Row(children: [
-          HeroCard.tile(label: 'Streak', value: '$_idx'),
+          HeroCard.tile(label: 'Streak', value: '$_solved'),
           const SizedBox(width: HcSpace.s2),
-          HeroCard.tile(label: 'Next rating', value: s == null ? '—' : '${s.puzzle.rating}'),
+          HeroCard.tile(label: 'Misses', value: '$_misses/$maxMisses'),
         ]),
       ),
       if (s != null)
@@ -193,7 +206,13 @@ class _StreakScreenState extends State<StreakScreen> {
               if (s.status == PuzzleStatus.failed)
                 Padding(
                   padding: const EdgeInsets.only(top: HcSpace.s2),
-                  child: Text('Missed it. Streak over.', textAlign: TextAlign.center, style: HcText.titleSm.copyWith(color: hc.dangerInk)),
+                  child: Text(
+                    _misses + 1 >= maxMisses
+                        ? 'Missed it. Streak over.'
+                        : 'Missed it. ${maxMisses - _misses - 1} ${maxMisses - _misses - 1 == 1 ? 'miss' : 'misses'} left.',
+                    textAlign: TextAlign.center,
+                    style: HcText.titleSm.copyWith(color: hc.dangerInk),
+                  ),
                 ),
             ],
           ),

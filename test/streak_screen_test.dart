@@ -71,6 +71,55 @@ void main() {
     expect(find.text('New personal best!'), findsOneWidget);
   });
 
+  testWidgets('allows two misses before ending the run on the third (chess.com Survival rules)', (t) async {
+    final puzzles = List.generate(
+      4,
+      (i) => {
+        'id': '0000000-000$i',
+        'fen': mateIn1['fen'],
+        'solution': mateIn1['solution'],
+        'themes': mateIn1['themes'],
+        'rating': 900,
+      },
+    );
+    await openStreak(t, {
+      '/puzzles/streak/stats': {'best': 0},
+      '/puzzles/streak/stream': {'puzzles': puzzles},
+      '/puzzles/streak/submit': {'personalBest': 1},
+    });
+    await t.tap(find.text('Start'));
+    await t.pumpAndSettle();
+
+    // Miss #1: a legal but wrong move.
+    await tapSquare(t, 'f2');
+    await tapSquare(t, 'f3');
+    await t.pump();
+    expect(find.text('Missed it. 2 misses left.'), findsOneWidget);
+    await t.pumpAndSettle(const Duration(milliseconds: 500));
+
+    // Miss #2.
+    await tapSquare(t, 'f2');
+    await tapSquare(t, 'f3');
+    await t.pump();
+    expect(find.text('Missed it. 1 miss left.'), findsOneWidget);
+    await t.pumpAndSettle(const Duration(milliseconds: 500));
+
+    // A solve in between still counts toward the streak.
+    await tapSquare(t, 'd1');
+    await tapSquare(t, 'd8');
+    await t.pumpAndSettle(const Duration(milliseconds: 500));
+    expect(find.text('Streak', skipOffstage: false), findsWidgets);
+
+    // Miss #3 ends the run.
+    await tapSquare(t, 'f2');
+    await tapSquare(t, 'f3');
+    await t.pump();
+    expect(find.text('Missed it. Streak over.'), findsOneWidget);
+    await t.pumpAndSettle(const Duration(milliseconds: 600));
+
+    expect(find.text('Streak: 1'), findsOneWidget);
+  });
+
   testWidgets('a failed stream fetch shows the error inline instead of crashing', (t) async {
     await openStreak(t, {'/puzzles/streak/stats': {'best': 0}});
     await t.tap(find.text('Start'));
