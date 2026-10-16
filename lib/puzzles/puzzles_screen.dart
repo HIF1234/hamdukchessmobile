@@ -11,6 +11,7 @@ import 'battle_lobby_screen.dart';
 import 'puzzle_session.dart';
 import 'puzzle_store.dart';
 import 'storm_screen.dart';
+import 'streak_screen.dart';
 import 'theme_stats_screen.dart';
 
 /// Rated puzzles that work offline: solve from the downloaded pack; results upload when
@@ -40,6 +41,15 @@ const puzzleThemes = <(String?, String)>[
   ('mateIn3', 'Mate in 3'),
   ('endgame', 'Endgames'),
   ('promotion', 'Promotion'),
+];
+
+/// Timed/competitive puzzle modes, offered as a horizontal strip below the hero card so
+/// the header row stays uncluttered as more modes are added.
+final _puzzleModes = <(IconData, String, WidgetBuilder)>[
+  (Icons.bolt_rounded, 'Storm', (_) => const StormScreen()),
+  (Icons.sports_kabaddi_rounded, 'Battle', (_) => const BattleLobbyScreen()),
+  (Icons.trending_up_rounded, 'Streak', (_) => const StreakScreen()),
+  (Icons.insights_rounded, 'Stats', (_) => const ThemeStatsScreen()),
 ];
 
 class _PuzzlesScreenState extends State<PuzzlesScreen> {
@@ -166,25 +176,7 @@ class _PuzzlesScreenState extends State<PuzzlesScreen> {
               children: [
                 Row(children: [
                   Expanded(child: HeroCard.overline('Puzzle rating')),
-                  if (_streak > 0) ...[
-                    HcBadge.onHero('$_streak day streak', icon: Icons.local_fire_department_rounded),
-                    const SizedBox(width: HcSpace.s2),
-                  ],
-                  IconButton(
-                    icon: const Icon(Icons.bolt_rounded, color: HcColors.onForest),
-                    tooltip: 'Puzzle Storm',
-                    onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const StormScreen())),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.sports_kabaddi_rounded, color: HcColors.onForest),
-                    tooltip: 'Puzzle Battle',
-                    onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const BattleLobbyScreen())),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.insights_rounded, color: HcColors.onForest),
-                    tooltip: 'Stats by theme',
-                    onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ThemeStatsScreen())),
-                  ),
+                  if (_streak > 0) HcBadge.onHero('$_streak day streak', icon: Icons.local_fire_department_rounded),
                 ]),
                 const SizedBox(height: HcSpace.s1),
                 Text(
@@ -205,6 +197,25 @@ class _PuzzlesScreenState extends State<PuzzlesScreen> {
             ),
           ),
         ),
+        SizedBox(
+          height: 40,
+          child: ListView(
+            padding: const EdgeInsets.symmetric(horizontal: HcSpace.s4),
+            scrollDirection: Axis.horizontal,
+            children: [
+              for (final (icon, label, builder) in _puzzleModes)
+                Padding(
+                  padding: const EdgeInsets.only(right: HcSpace.s2),
+                  child: OutlinedButton.icon(
+                    icon: Icon(icon, size: 18),
+                    label: Text(label),
+                    onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: builder)),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: HcSpace.s4),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: HcSpace.s4),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
