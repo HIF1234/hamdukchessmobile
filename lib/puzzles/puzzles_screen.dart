@@ -52,9 +52,13 @@ class _PuzzlesScreenState extends State<PuzzlesScreen> {
     super.initState();
     _init();
     _loadStreak();
-    // Sync whenever a connection comes back.
+    // Sync whenever a connection comes back. Uploading results is tiny and always welcome;
+    // the pack top-up is a bigger download, so this background trigger only does that part
+    // on WiFi -- an explicit action elsewhere (opening the screen, hitting the limit banner)
+    // still refills regardless of connection, since the player is actively waiting on it.
     Connectivity().onConnectivityChanged.listen((r) {
-      if (!r.contains(ConnectivityResult.none)) _sync();
+      if (r.contains(ConnectivityResult.none)) return;
+      _sync(allowRefill: r.contains(ConnectivityResult.wifi));
     });
   }
 
@@ -89,11 +93,11 @@ class _PuzzlesScreenState extends State<PuzzlesScreen> {
     await _init();
   }
 
-  Future<void> _sync() async {
+  Future<void> _sync({bool allowRefill = true}) async {
     final store = _store;
     if (store == null || _syncing) return;
     setState(() => _syncing = true);
-    final r = await store.sync(Api.instance);
+    final r = await store.sync(Api.instance, allowRefill: allowRefill);
     if (r.uploaded > 0 || r.overLimit > 0) {
       Telemetry.puzzlesSynced(uploaded: r.uploaded, overLimit: r.overLimit);
     }

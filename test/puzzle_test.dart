@@ -1,9 +1,13 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hamduk_chess/core/api.dart';
 import 'package:hamduk_chess/core/storage.dart';
 import 'package:hamduk_chess/puzzles/puzzle_session.dart';
 import 'package:hamduk_chess/puzzles/puzzle_store.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 
 // Back-rank mate in 1: Rd8#.
 final mateIn1 = Puzzle(id: '00000000-0000-0000-0000-000000000001', fen: '6k1/5ppp/8/8/8/8/5PPP/3R2K1 w - - 0 1', solution: ['d1d8'], themes: ['mateIn1'], rating: 900);
@@ -93,6 +97,33 @@ void main() {
       expect(forks.remaining, 1);
       await forks.record(forks.next!, true);
       expect(rated.pendingUploads, 1);
+    });
+
+    test('allowRefill: false uploads results but skips the pack top-up', () async {
+      final json = JsonStore.at(dir);
+      await json.write('puzzle_pack', {'puzzles': [mateIn1.toJson()], 'rating': 1200, 'maxPack': 30});
+      final store = await PuzzleStore.open(json);
+      await store.record(store.next!, true); // pack now empty, one result queued
+
+      final calls = <String>[];
+      Api.client = MockClient((request) async {
+        calls.add(request.url.path);
+        if (request.url.path.endsWith('/puzzles/sync')) {
+          return http.Response(jsonEncode({'results': [{'status': 'recorded', 'rating': 1210}]}), 200);
+        }
+        return http.Response(jsonEncode({'puzzles': [fork.toJson()], 'rating': 1210, 'maxPack': 30}), 200);
+      });
+      addTearDown(() => Api.client = http.Client());
+
+      final r = await store.sync(Api.instance, allowRefill: false);
+      expect(r.uploaded, 1);
+      expect(calls.any((p) => p.endsWith('/puzzles/pack')), isFalse);
+      expect(store.remaining, 0); // no top-up happened
+
+      final r2 = await store.sync(Api.instance); // allowRefill defaults to true
+      expect(calls.any((p) => p.endsWith('/puzzles/pack')), isTrue);
+      expect(store.remaining, 1);
+      expect(r2.uploaded, 0); // nothing left queued the second time
     });
   });
 }

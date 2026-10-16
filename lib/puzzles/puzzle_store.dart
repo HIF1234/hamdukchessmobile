@@ -101,9 +101,12 @@ class PuzzleStore {
     await Future.wait([_savePack(), _store.write(_queueKey, _queue), if (success) _bumpSolvedToday()]);
   }
 
-  /// Uploads waiting results (oldest first), then tops the pack up. Safe to call any time;
-  /// on no connection it leaves everything in place for next time.
-  Future<SyncResult> sync(Api api) async {
+  /// Uploads waiting results (oldest first), then tops the pack up unless [allowRefill] is
+  /// false (the background Wi-Fi-only auto top-up passes false on cellular -- uploads are
+  /// tiny and always welcome, but a 30-puzzle pack download isn't something to do silently
+  /// on mobile data). Safe to call any time; on no connection it leaves everything in place
+  /// for next time.
+  Future<SyncResult> sync(Api api, {bool allowRefill = true}) async {
     var uploaded = 0;
     var overLimit = 0;
     try {
@@ -123,7 +126,7 @@ class PuzzleStore {
         _queue.removeRange(0, batch.length);
         await _store.write(_queueKey, _queue);
       }
-      if (_pack.length < refillBelow) {
+      if (allowRefill && _pack.length < refillBelow) {
         final res = await api.get('/puzzles/pack', {'count': '$maxPack', 'theme': ?theme}) as Map;
         maxPack = (res['maxPack'] as num).toInt();
         rating = (res['rating'] as num?)?.toInt() ?? rating;
