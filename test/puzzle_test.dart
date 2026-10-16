@@ -125,5 +125,24 @@ void main() {
       expect(store.remaining, 1);
       expect(r2.uploaded, 0); // nothing left queued the second time
     });
+
+    test('remainingToday counts down locally, then takes the server\'s number on sync', () async {
+      final json = JsonStore.at(dir);
+      await json.write('puzzle_pack', {'puzzles': [mateIn1.toJson(), fork.toJson()], 'rating': 1200, 'maxPack': 30});
+      final store = await PuzzleStore.open(json);
+      store.remainingToday = 5;
+      await store.record(store.next!, true);
+      expect(store.remainingToday, 4); // optimistic local decrement
+
+      Api.client = MockClient((request) async {
+        return http.Response(
+          jsonEncode({'results': [{'status': 'recorded', 'rating': 1210}], 'remainingToday': 17}),
+          200,
+        );
+      });
+      addTearDown(() => Api.client = http.Client());
+      await store.sync(Api.instance, allowRefill: false);
+      expect(store.remainingToday, 17); // server's count wins
+    });
   });
 }

@@ -24,6 +24,10 @@ class PuzzleStore {
   int? rating; // last rating the server told us
   int maxPack = 30;
 
+  /// Free puzzles left today, server-counted; null for Plus/Gold (unlimited) or before the
+  /// first server response of the session.
+  int? remainingToday;
+
   int get remaining => _pack.length;
   int get pendingUploads => _queue.length;
 
@@ -98,6 +102,9 @@ class PuzzleStore {
   Future<void> record(Puzzle p, bool success, {int hintsUsed = 0}) async {
     _pack.removeWhere((x) => x.id == p.id);
     _queue.add({'puzzleId': p.id, 'success': success, 'hintsUsed': hintsUsed});
+    // Optimistic: counts this one immediately, rather than waiting for the next sync
+    // round-trip; the server's own number (authoritative) overwrites it once that lands.
+    if (remainingToday != null) remainingToday = (remainingToday! - 1).clamp(0, 1 << 30);
     await Future.wait([_savePack(), _store.write(_queueKey, _queue), if (success) _bumpSolvedToday()]);
   }
 
@@ -122,6 +129,7 @@ class PuzzleStore {
             overLimit++;
           }
         }
+        if (res.containsKey('remainingToday')) remainingToday = (res['remainingToday'] as num?)?.toInt();
         // Every result in the batch is settled (recorded, over the free limit, or rejected).
         _queue.removeRange(0, batch.length);
         await _store.write(_queueKey, _queue);
@@ -130,6 +138,7 @@ class PuzzleStore {
         final res = await api.get('/puzzles/pack', {'count': '$maxPack', 'theme': ?theme}) as Map;
         maxPack = (res['maxPack'] as num).toInt();
         rating = (res['rating'] as num?)?.toInt() ?? rating;
+        remainingToday = (res['remainingToday'] as num?)?.toInt();
         final known = _pack.map((p) => p.id).toSet();
         _pack.addAll(((res['puzzles'] as List).cast<Map>())
             .map((p) => Puzzle.fromJson(p.cast<String, dynamic>()))

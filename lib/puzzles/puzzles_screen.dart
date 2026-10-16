@@ -175,6 +175,10 @@ class _PuzzlesScreenState extends State<PuzzlesScreen> {
                   HeroCard.tile(label: 'Solved today', value: store == null ? '—' : '${store.solvedToday}'),
                   const SizedBox(width: HcSpace.s2),
                   HeroCard.tile(label: 'Ready offline', value: store == null ? '—' : '${store.remaining}'),
+                  if (store?.remainingToday != null) ...[
+                    const SizedBox(width: HcSpace.s2),
+                    HeroCard.tile(label: 'Left today', value: '${store!.remainingToday}'),
+                  ],
                 ]),
               ],
             ),
