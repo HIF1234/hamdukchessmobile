@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../board/chess_board.dart';
 import '../core/api.dart';
@@ -23,6 +24,7 @@ class _DailyPuzzleScreenState extends State<DailyPuzzleScreen> {
   PuzzleSession? _session;
   String? _error;
   bool _submitting = false;
+  int? _streak;
 
   @override
   void initState() {
@@ -71,12 +73,38 @@ class _DailyPuzzleScreenState extends State<DailyPuzzleScreen> {
         'success': s.status == PuzzleStatus.solved,
         'hintsUsed': s.maxHintLevel,
       });
-      Telemetry.puzzleFinished(solved: s.status == PuzzleStatus.solved, offline: false);
+      // Best-effort: analytics failing shouldn't skip the streak reload below.
+      try {
+        Telemetry.puzzleFinished(solved: s.status == PuzzleStatus.solved, offline: false);
+      } catch (_) {}
+      if (s.status == PuzzleStatus.solved) await _loadStreak();
     } on ApiError {
       // The streak/rating update just didn't go through; the solve itself still shows.
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
+  }
+
+  /// The "solve at least one puzzle a day" streak -- the same counter PuzzlesScreen shows,
+  /// since it's kept across both the daily puzzle and themed-pack solving, not daily-only.
+  Future<void> _loadStreak() async {
+    try {
+      final me = await Api.instance.get('/me') as Map;
+      final streak = ((me['puzzles'] as Map?)?['current_streak'] as num?)?.toInt();
+      if (mounted) setState(() => _streak = streak);
+    } catch (_) {
+      // Best-effort; the solve itself already shows regardless.
+    }
+  }
+
+  void _share(PuzzleSession s) {
+    final streak = _streak;
+    final how = s.maxHintLevel >= 2 ? 'with the move shown' : (s.maxHintLevel == 1 ? 'with a hint' : 'first try');
+    SharePlus.instance.share(ShareParams(
+      text: "I solved today's Hamduk Chess puzzle, $how!"
+          '${streak != null && streak > 0 ? ' $streak-day streak.' : ''}'
+          ' play.chess.hamduk.com.ng/puzzles/daily',
+    ));
   }
 
   @override
@@ -118,18 +146,37 @@ class _DailyPuzzleScreenState extends State<DailyPuzzleScreen> {
                           ? 'Solved! No rating gained (move was shown).'
                           : s.maxHintLevel == 1
                               ? 'Solved! Reduced rating gain (hint used).'
-                              : 'Solved!',
+                              : 'Solved first try!',
                       PuzzleStatus.failed => 'Not quite. The best move was ${s.puzzle.solution.first}.',
                     },
                     style: HcText.titleMd.copyWith(color: hc.ink),
                   ),
+                  if (s.status == PuzzleStatus.solved && (_streak ?? 0) > 0) ...[
+                    const SizedBox(height: HcSpace.s1),
+                    Text(
+                      '$_streak-day streak',
+                      style: HcText.bodySm.copyWith(color: hc.ink2),
+                    ),
+                  ],
                   const SizedBox(height: HcSpace.s3),
                   if (s.status == PuzzleStatus.playing)
                     TextButton(
                       onPressed: s.hintLevel >= 2 ? null : () => setState(s.showHint),
                       child: Text(s.hintLevel == 0 ? 'Hint' : 'Show move'),
                     )
-                  else
+                  else ...[
+                    if (s.status == PuzzleStatus.solved)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: HcSpace.s2),
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: () => _share(s),
+                            icon: const Icon(Icons.share_rounded),
+                            label: const Text('Share'),
+                          ),
+                        ),
+                      ),
                     SizedBox(
                       width: double.infinity,
                       child: FilledButton(
@@ -138,6 +185,7 @@ class _DailyPuzzleScreenState extends State<DailyPuzzleScreen> {
                         child: const Text('Done'),
                       ),
                     ),
+                  ],
                 ],
               ),
       ),
