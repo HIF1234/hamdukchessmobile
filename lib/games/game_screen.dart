@@ -1,4 +1,9 @@
+import 'dart:async';
+import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../board/chess_board.dart';
@@ -14,6 +19,7 @@ import '../review/review_screen.dart';
 import '../social/conversation_screen.dart';
 import 'game_controller.dart';
 import 'game_state.dart';
+import 'share_image.dart';
 import 'voice_move_sheet.dart';
 
 String _categoryName(String category) => category.isEmpty ? '' : '${category[0].toUpperCase()}${category.substring(1)}';
@@ -113,8 +119,88 @@ class _GameScreenState extends State<GameScreen> {
     if (ok == true) await c.abort();
   }
 
+  /// Neutral, third-person framing for a publicly shared artifact -- distinct from
+  /// _resultHeadline/_resultDetail, which are written from the sharer's own "you won" POV
+  /// for the in-app result sheet, not something that belongs on an image going out to others.
+  String _shareHeadline(GameState g) {
+    if (g.endReason == 'first_move_timeout' || g.endReason == 'abort') return 'Game aborted';
+    if (g.result == 'draw' || g.winnerId == null) return 'Draw';
+    return '${g.winnerId == g.white.id ? g.white.username : g.black.username} won';
+  }
+
+  String _shareDetail(GameState g) {
+    final moves = (g.sanMoves.length / 2).ceil();
+    return switch (g.endReason) {
+      'checkmate' => 'By checkmate in $moves moves.',
+      'stalemate' => 'By stalemate.',
+      'draw' => 'By the fifty-move rule or repetition.',
+      'agreement' => 'By agreement.',
+      'resignation' => 'By resignation.',
+      'flag' => 'On time.',
+      'disconnect' => 'By disconnection.',
+      'first_move_timeout' || 'abort' => 'No first move was made in time.',
+      _ => 'Game in progress.',
+    };
+  }
+
+  Future<void> _shareImage(GameState g) async {
+    final bytes = await captureShareImage(
+      context,
+      g: g,
+      whiteAtBottom: c.isWhite != _flipped,
+      headline: _shareHeadline(g),
+      detail: _shareDetail(g),
+    );
+    if (!mounted) return;
+    if (bytes == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Couldn't build the image.")));
+      return;
+    }
+    final dir = await getTemporaryDirectory();
+    final file = File('${dir.path}/hamduk-game-${g.id}.png');
+    await file.writeAsBytes(bytes);
+    await SharePlus.instance.share(ShareParams(files: [XFile(file.path)]));
+  }
+
+  Future<void> _shareGif(GameState g) async {
+    if (g.sanMoves.isEmpty) return;
+    final progress = ValueNotifier<double>(0);
+    unawaited(showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Text('Building GIF…'),
+          const SizedBox(height: HcSpace.s3),
+          ValueListenableBuilder(valueListenable: progress, builder: (_, p, _) => LinearProgressIndicator(value: p)),
+        ]),
+      ),
+    ));
+    Uint8List? bytes;
+    try {
+      bytes = await captureShareGif(
+        context,
+        g: g,
+        whiteAtBottom: c.isWhite != _flipped,
+        onProgress: (p) => progress.value = p,
+      );
+    } finally {
+      if (mounted) Navigator.of(context, rootNavigator: true).pop();
+    }
+    if (!mounted) return;
+    if (bytes == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Couldn't build the GIF.")));
+      return;
+    }
+    final dir = await getTemporaryDirectory();
+    final file = File('${dir.path}/hamduk-game-${g.id}.gif');
+    await file.writeAsBytes(bytes);
+    await SharePlus.instance.share(ShareParams(files: [XFile(file.path)]));
+  }
+
   Future<void> _share(GameState g) async {
     final hasPgn = g.pgn != null && g.pgn!.isNotEmpty;
+    final hasMoves = g.sanMoves.isNotEmpty;
     final choice = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
@@ -134,12 +220,29 @@ class _GameScreenState extends State<GameScreen> {
               subtitle: hasPgn ? null : const Text('No moves yet'),
               onTap: () => Navigator.pop(ctx, 'pgn'),
             ),
+            ListTile(
+              leading: const Icon(Icons.image_rounded),
+              title: const Text('Share image'),
+              subtitle: const Text('Sized for WhatsApp Status'),
+              onTap: () => Navigator.pop(ctx, 'image'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.gif_rounded),
+              title: const Text('Share GIF'),
+              enabled: hasMoves,
+              subtitle: Text(hasMoves ? 'The whole game, move by move' : 'No moves yet'),
+              onTap: () => Navigator.pop(ctx, 'gif'),
+            ),
           ],
         ),
       ),
     );
     if (choice == 'pgn' && hasPgn) {
       await SharePlus.instance.share(ShareParams(text: g.pgn!));
+    } else if (choice == 'image') {
+      await _shareImage(g);
+    } else if (choice == 'gif' && hasMoves) {
+      await _shareGif(g);
     } else if (choice == 'link') {
       await SharePlus.instance.share(
         ShareParams(text: 'Watch my game on Hamduk Chess: https://play.chess.hamduk.com.ng/play/${g.id}'),
