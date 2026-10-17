@@ -8,6 +8,7 @@ import '../core/settings.dart';
 import '../core/telemetry.dart';
 import '../core/theme.dart';
 import 'battle_lobby_screen.dart';
+import 'misses_screen.dart';
 import 'puzzle_session.dart';
 import 'puzzle_store.dart';
 import 'storm_screen.dart';
@@ -50,6 +51,7 @@ final _puzzleModes = <(IconData, String, WidgetBuilder)>[
   (Icons.sports_kabaddi_rounded, 'Battle', (_) => const BattleLobbyScreen()),
   (Icons.trending_up_rounded, 'Streak', (_) => const StreakScreen()),
   (Icons.insights_rounded, 'Stats', (_) => const ThemeStatsScreen()),
+  (Icons.replay_rounded, 'Misses', (_) => const MissesScreen()),
 ];
 
 class _PuzzlesScreenState extends State<PuzzlesScreen> {
