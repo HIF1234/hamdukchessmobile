@@ -19,10 +19,30 @@ import '../engine/uci_engine.dart';
 import '../review/review_screen.dart';
 import 'bot_results.dart';
 
+/// Parses a "min+inc" id ("5+0", "15+10") into (baseMs, incrementMs). Null for untimed.
+(int, int)? parseBotTimeControl(String? id) {
+  if (id == null) return null;
+  final parts = id.split('+');
+  if (parts.length != 2) return null;
+  final min = int.tryParse(parts[0]);
+  final inc = int.tryParse(parts[1]);
+  if (min == null || inc == null) return null;
+  return (min * 60000, inc * 1000);
+}
+
 /// A game against one of the Naija bots, played entirely on the phone. Stockfish runs as a
 /// separate program; no connection needed.
 class BotGameScreen extends StatefulWidget {
-  const BotGameScreen({super.key, required this.bot, required this.playWhite, this.initialSanMoves, this.autoHint = false});
+  const BotGameScreen({
+    super.key,
+    required this.bot,
+    required this.playWhite,
+    this.initialSanMoves,
+    this.autoHint = false,
+    this.timeControl,
+    this.initialWhiteMs,
+    this.initialBlackMs,
+  });
   final Map<String, dynamic> bot;
   final bool playWhite;
   /// When resuming a game the app closed mid-way through (see [ActiveGame]).
@@ -30,6 +50,12 @@ class BotGameScreen extends StatefulWidget {
   /// Shows a hint arrow as soon as the engine is ready, unprompted -- for a brand-new
   /// player's very first move, right after onboarding.
   final bool autoHint;
+
+  /// "5+0", "10+0", "15+10", or null for untimed (the default).
+  final String? timeControl;
+  /// Resumed clock state (see [ActiveGame]); null starts both sides at the base time.
+  final int? initialWhiteMs;
+  final int? initialBlackMs;
 
   @override
   State<BotGameScreen> createState() => _BotGameScreenState();
@@ -50,6 +76,12 @@ class _BotGameScreenState extends State<BotGameScreen> {
   String? _reason;
   int _ply = 0;
 
+  late int? _baseMs;
+  late int _incMs;
+  int? _whiteMs;
+  int? _blackMs;
+  Timer? _clockTimer;
+
   String get _name => widget.bot['name'] as String;
   int get _rating => (widget.bot['rating'] as num).toInt();
 
@@ -57,6 +89,14 @@ class _BotGameScreenState extends State<BotGameScreen> {
   void initState() {
     super.initState();
     KeepScreenOn.push();
+    final tc = parseBotTimeControl(widget.timeControl);
+    _baseMs = tc?.$1;
+    _incMs = tc?.$2 ?? 0;
+    if (_baseMs != null) {
+      _whiteMs = widget.initialWhiteMs ?? _baseMs;
+      _blackMs = widget.initialBlackMs ?? _baseMs;
+      _clockTimer = Timer.periodic(const Duration(milliseconds: 250), (_) => _tickClock());
+    }
     final initial = widget.initialSanMoves;
     if (initial != null) {
       for (final san in initial) {
@@ -70,9 +110,40 @@ class _BotGameScreenState extends State<BotGameScreen> {
     _startEngine();
   }
 
+  void _tickClock() {
+    if (_result != null) return;
+    final white = _game.turn == ch.Color.WHITE;
+    final ms = white ? _whiteMs! - 250 : _blackMs! - 250;
+    setState(() {
+      if (white) {
+        _whiteMs = ms;
+      } else {
+        _blackMs = ms;
+      }
+    });
+    if (ms <= 0) {
+      setState(() {
+        if (white) {
+          _whiteMs = 0;
+        } else {
+          _blackMs = 0;
+        }
+      });
+      final playerFlagged = white == widget.playWhite;
+      _finish(playerFlagged ? 'loss' : 'win', 'timeout');
+    }
+  }
+
   /// Keeps [ActiveGame] in sync so the app can resume here if it's closed mid-game.
   void _rememberProgress() {
-    ActiveGame.setBot(botId: widget.bot['id'] as String, playWhite: widget.playWhite, sanMoves: _game.getHistory().cast<String>());
+    ActiveGame.setBot(
+      botId: widget.bot['id'] as String,
+      playWhite: widget.playWhite,
+      sanMoves: _game.getHistory().cast<String>(),
+      timeControl: widget.timeControl,
+      whiteMs: _whiteMs,
+      blackMs: _blackMs,
+    );
   }
 
   Future<void> _startEngine() async {
@@ -93,7 +164,18 @@ class _BotGameScreenState extends State<BotGameScreen> {
   void dispose() {
     KeepScreenOn.pop();
     _engine?.dispose();
+    _clockTimer?.cancel();
     super.dispose();
+  }
+
+  /// Fischer increment, added to the side that just moved.
+  void _addIncrement(bool whiteJustMoved) {
+    if (_baseMs == null || _incMs == 0) return;
+    if (whiteJustMoved) {
+      _whiteMs = _whiteMs! + _incMs;
+    } else {
+      _blackMs = _blackMs! + _incMs;
+    }
   }
 
   bool _onMove(String from, String to, String? promo) {
@@ -106,6 +188,7 @@ class _BotGameScreenState extends State<BotGameScreen> {
       _lastSan = san;
       _hintMove = null;
       _ply++;
+      _addIncrement(widget.playWhite);
     });
     _rememberProgress();
     if (!_checkEnd()) _botMove();
@@ -130,6 +213,7 @@ class _BotGameScreenState extends State<BotGameScreen> {
       _lastSan = san;
       _ply++;
       _thinking = false;
+      _addIncrement(!widget.playWhite);
     });
     _rememberProgress();
     _checkEnd();
@@ -190,7 +274,9 @@ class _BotGameScreenState extends State<BotGameScreen> {
   }
 
   void _finish(String result, String reason) {
+    if (_result != null) return; // the clock timer can race a move/resign that already ended it
     GameFeedback.on(GameEvent.gameEnd);
+    _clockTimer?.cancel();
     setState(() {
       _result = result;
       _reason = reason;
@@ -198,7 +284,8 @@ class _BotGameScreenState extends State<BotGameScreen> {
     });
     ActiveGame.clear();
     BotResults.add({
-      'timeControl': '5+0', // bot games are untimed; recorded the same way as on the website
+      // Untimed bot games are recorded as '5+0' too, same convention as the website.
+      'timeControl': widget.timeControl ?? '5+0',
       'variant': 'standard',
       'botId': widget.bot['id'],
       'result': result,
@@ -232,7 +319,15 @@ class _BotGameScreenState extends State<BotGameScreen> {
       _result = null;
       _reason = null;
       _ply = 0;
+      if (_baseMs != null) {
+        _whiteMs = _baseMs;
+        _blackMs = _baseMs;
+      }
     });
+    if (_baseMs != null) {
+      _clockTimer?.cancel();
+      _clockTimer = Timer.periodic(const Duration(milliseconds: 250), (_) => _tickClock());
+    }
     _rememberProgress();
     if (!widget.playWhite) _botMove();
   }
@@ -314,6 +409,12 @@ class _BotGameScreenState extends State<BotGameScreen> {
     if (mounted) await NotificationPrompt.gameFinished(context);
   }
 
+  Widget _clockWidget(bool white) {
+    if (_baseMs == null) return const _UntimedPill();
+    final ms = white ? _whiteMs! : _blackMs!;
+    return GameClock(ms: ms, active: _result == null && _game.turn == (white ? ch.Color.WHITE : ch.Color.BLACK));
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -334,7 +435,7 @@ class _BotGameScreenState extends State<BotGameScreen> {
                       imageUrl: AppSettings.instance.lowData ? null : widget.bot['portraitUrl'] as String?,
                     ),
                     status: _thinking ? '$_name is thinking…' : (_ply == 0 ? '“${widget.bot['catchphrase']}”' : null),
-                    clock: const _UntimedPill(),
+                    clock: _clockWidget(!widget.playWhite),
                   ),
                   ChessBoardView(
                     fen: _game.fen,
@@ -346,7 +447,7 @@ class _BotGameScreenState extends State<BotGameScreen> {
                     onMove: _result == null && !_thinking ? _onMove : null,
                     animate: !AppSettings.instance.lowData,
                   ),
-                  const PlayerBar(name: 'You', clock: _UntimedPill()),
+                  PlayerBar(name: 'You', clock: _clockWidget(widget.playWhite)),
                 ],
               ),
       ),

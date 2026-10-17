@@ -211,12 +211,26 @@ class _HomeShellState extends State<HomeShell> {
       case OnlineActiveGame(gameId: final id):
         if (me == null) return;
         Navigator.of(context).push(MaterialPageRoute(builder: (_) => GameScreen(gameId: id, myId: me)));
-      case BotActiveGame(botId: final botId, playWhite: final playWhite, sanMoves: final moves):
+      case BotActiveGame(
+          botId: final botId,
+          playWhite: final playWhite,
+          sanMoves: final moves,
+          timeControl: final timeControl,
+          whiteMs: final whiteMs,
+          blackMs: final blackMs,
+        ):
         final matches = widget.config.bots.where((b) => b['id'] == botId);
         if (matches.isEmpty) return;
         final bot = matches.first;
         Navigator.of(context).push(MaterialPageRoute(
-          builder: (_) => BotGameScreen(bot: bot, playWhite: playWhite, initialSanMoves: moves),
+          builder: (_) => BotGameScreen(
+            bot: bot,
+            playWhite: playWhite,
+            initialSanMoves: moves,
+            timeControl: timeControl,
+            initialWhiteMs: whiteMs,
+            initialBlackMs: blackMs,
+          ),
         ));
     }
   }

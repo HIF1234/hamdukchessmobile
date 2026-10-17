@@ -402,6 +402,7 @@ class _PlayScreenState extends State<PlayScreen> {
 
   Future<void> _playBot(Map<String, dynamic> bot) async {
     var side = 'random';
+    var timeControl = 'untimed'; // 'untimed', '5+0', '10+0' or '15+10'
     final go = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -489,6 +490,17 @@ class _PlayScreenState extends State<PlayScreen> {
                   selected: {side},
                   onSelectionChanged: (s) => set(() => side = s.first),
                 ),
+                const SizedBox(height: HcSpace.s3),
+                SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment(value: 'untimed', label: Text('Off')),
+                    ButtonSegment(value: '5+0', label: Text('5+0')),
+                    ButtonSegment(value: '10+0', label: Text('10+0')),
+                    ButtonSegment(value: '15+10', label: Text('15+10')),
+                  ],
+                  selected: {timeControl},
+                  onSelectionChanged: (s) => set(() => timeControl = s.first),
+                ),
                 const SizedBox(height: HcSpace.s4),
                 PlayButton(
                   label: 'Play ${bot['name']}',
@@ -506,7 +518,11 @@ class _PlayScreenState extends State<PlayScreen> {
         : side == 'w';
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => BotGameScreen(bot: bot, playWhite: playWhite),
+        builder: (_) => BotGameScreen(
+          bot: bot,
+          playWhite: playWhite,
+          timeControl: timeControl == 'untimed' ? null : timeControl,
+        ),
       ),
     );
   }
@@ -1126,6 +1142,9 @@ class _ContinueBotRow extends StatelessWidget {
             bot: persona,
             playWhite: bot.playWhite,
             initialSanMoves: bot.sanMoves,
+            timeControl: bot.timeControl,
+            initialWhiteMs: bot.whiteMs,
+            initialBlackMs: bot.blackMs,
           ),
         ),
       ),
