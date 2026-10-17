@@ -6,8 +6,9 @@ import '../core/theme.dart';
 import 'puzzles_screen.dart' show puzzleThemes;
 
 /// How this player is doing on each tactical theme they've tried, weakest first -- the
-/// server already sorts it that way. No design spec exists for this screen yet; built with
-/// the app's own tokens (HcListRow, HeroCard) rather than inventing new chrome.
+/// server already sorts it that way. Mirrors the web's getMyThemeProgress (attempted,
+/// solved, due-for-review via spaced repetition). No design spec exists for this screen
+/// yet; built with the app's own tokens (HcListRow, HeroCard) rather than inventing new chrome.
 class ThemeStatsScreen extends StatefulWidget {
   const ThemeStatsScreen({super.key});
 
@@ -80,7 +81,9 @@ class _ThemeStatsScreenState extends State<ThemeStatsScreen> {
                     for (final t in themes)
                       HcListRow(
                         title: _label(t['theme'] as String),
-                        subtitle: '${t['solved']} of ${t['attempted']} solved',
+                        subtitle: (t['due'] as int) > 0
+                            ? '${t['solved']} of ${t['attempted']} solved · ${t['due']} due for review'
+                            : '${t['solved']} of ${t['attempted']} solved',
                         trailing: Text(
                           '${t['accuracy']}%',
                           style: HcText.titleSm.copyWith(

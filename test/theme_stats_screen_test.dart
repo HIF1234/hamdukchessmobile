@@ -25,8 +25,8 @@ void main() {
     await openThemeStats(t, {
       '/puzzles/theme-stats': {
         'themes': [
-          {'theme': 'backRankMate', 'attempted': 10, 'solved': 4, 'accuracy': 40},
-          {'theme': 'fork', 'attempted': 18, 'solved': 13, 'accuracy': 72},
+          {'theme': 'backRankMate', 'attempted': 10, 'solved': 4, 'due': 2, 'accuracy': 40},
+          {'theme': 'fork', 'attempted': 18, 'solved': 13, 'due': 0, 'accuracy': 72},
         ],
       },
     });
@@ -34,8 +34,10 @@ void main() {
     expect(find.text('WEAKEST THEME'), findsOneWidget);
     expect(find.text('Back rank'), findsWidgets); // once in the callout, once in the list
     expect(find.text('40% accuracy over 10 puzzles'), findsOneWidget);
+    expect(find.text('4 of 10 solved · 2 due for review'), findsOneWidget);
     expect(find.text('Forks'), findsOneWidget);
     expect(find.text('72%'), findsOneWidget);
+    expect(find.text('13 of 18 solved'), findsOneWidget);
   });
 
   testWidgets('shows an empty state before any puzzles are solved', (t) async {
