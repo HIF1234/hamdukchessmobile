@@ -377,6 +377,8 @@ class PersonaCard extends StatelessWidget {
     required this.catchphrase,
     this.portraitUrl,
     this.locked = false,
+    this.ladderLocked = false,
+    this.beaten = false,
     this.lowData = false,
     this.onTap,
   });
@@ -389,6 +391,13 @@ class PersonaCard extends StatelessWidget {
 
   /// A Plus bot and the player is on the free tier.
   final bool locked;
+
+  /// The bot ladder: this bot's tier allows it, but the player hasn't beaten the one
+  /// before it yet.
+  final bool ladderLocked;
+
+  /// The bot ladder: already beaten.
+  final bool beaten;
 
   /// Low-data mode: no portrait download, initials on the stage.
   final bool lowData;
@@ -431,8 +440,33 @@ class PersonaCard extends StatelessWidget {
                       )
                     else
                       _StageInitials(name: name),
-                    if (locked) const Positioned(top: HcSpace.s2, right: HcSpace.s2, child: HcBadge.plus()),
-                    Positioned(left: HcSpace.s2, bottom: HcSpace.s2, child: _RatingChip(rating: rating, locked: locked)),
+                    if (locked)
+                      const Positioned(top: HcSpace.s2, right: HcSpace.s2, child: HcBadge.plus())
+                    else if (ladderLocked)
+                      Positioned(
+                        top: HcSpace.s2,
+                        right: HcSpace.s2,
+                        child: Container(
+                          padding: const EdgeInsets.all(HcSpace.s1),
+                          decoration: const BoxDecoration(color: HcColors.forest, shape: BoxShape.circle),
+                          child: const Icon(Icons.lock_rounded, size: 14, color: HcColors.onForest),
+                        ),
+                      )
+                    else if (beaten)
+                      Positioned(
+                        top: HcSpace.s2,
+                        right: HcSpace.s2,
+                        child: Container(
+                          padding: const EdgeInsets.all(HcSpace.s1),
+                          decoration: BoxDecoration(color: hc.gold, shape: BoxShape.circle),
+                          child: Icon(Icons.military_tech_rounded, size: 14, color: hc.onGold),
+                        ),
+                      ),
+                    Positioned(
+                      left: HcSpace.s2,
+                      bottom: HcSpace.s2,
+                      child: _RatingChip(rating: rating, locked: locked || ladderLocked),
+                    ),
                   ],
                 ),
               ),

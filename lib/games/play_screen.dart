@@ -67,6 +67,7 @@ class _PlayScreenState extends State<PlayScreen> {
   int _gamesPlayed = -1; // for the spec §10 cohort; -1 until known
   String _tier =
       'free'; // decides which bots are unlocked; cached for offline use
+  Set<String> _beatenBots = const {}; // the bot ladder: cached for offline use
   bool _lowMemory = false;
   String _lastTimeControl =
       '10+0'; // Quick game defaults to 10+0 on first launch
@@ -241,6 +242,8 @@ class _PlayScreenState extends State<PlayScreen> {
     final store = await JsonStore.open();
     final cached = await store.read('me_tier');
     if (cached is String && mounted) setState(() => _tier = cached);
+    final cachedBots = await store.read('me_beaten_bots');
+    if (cachedBots is List && mounted) setState(() => _beatenBots = cachedBots.cast<String>().toSet());
     try {
       final me = await Api.instance.get('/me') as Map;
       final ratings = (me['ratings'] as List).cast<Map>();
@@ -250,9 +253,16 @@ class _PlayScreenState extends State<PlayScreen> {
       );
       final tier = (me['account'] as Map)['tier'] as String? ?? 'free';
       await store.write('me_tier', tier);
-      if (mounted) setState(() => _tier = tier);
+      final beaten = ((me['bots'] as Map?)?['beaten'] as List?)?.cast<String>() ?? const [];
+      await store.write('me_beaten_bots', beaten);
+      if (mounted) {
+        setState(() {
+          _tier = tier;
+          _beatenBots = beaten.toSet();
+        });
+      }
     } catch (_) {
-      // Offline or failed: keep the cached tier; events are logged without the game count.
+      // Offline or failed: keep the cached tier/ladder; events are logged without the game count.
     }
   }
 
@@ -525,6 +535,7 @@ class _PlayScreenState extends State<PlayScreen> {
         ),
       ),
     );
+    if (mounted) _loadMe(); // a win may have just unlocked the next bot
   }
 
   String get _myId => Supabase.instance.client.auth.currentUser!.id;
@@ -1029,23 +1040,35 @@ class _PlayScreenState extends State<PlayScreen> {
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: HcSpace.s4),
               children: [
-                for (final b in widget.config.bots)
+                for (final (i, b) in widget.config.bots.indexed)
                   // The 2400+ bots search deepest; skip them on phones under 3 GB for now (spec §3).
                   if (!(_lowMemory && (b['rating'] as num) >= 2400))
                     Padding(
                       padding: const EdgeInsets.only(right: HcSpace.s3),
-                      child: PersonaCard(
-                        name: b['name'] as String,
-                        hometown: b['hometown'] as String,
-                        rating: (b['rating'] as num).toInt(),
-                        catchphrase: b['catchphrase'] as String,
-                        portraitUrl: b['portraitUrl'] as String?,
-                        locked: b['tier'] == 'plus' && _tier == 'free',
-                        lowData: AppSettings.instance.lowData,
-                        onTap: b['tier'] == 'plus' && _tier == 'free'
-                            ? () => showSubscriptionSheet(context, _tier)
-                            : () => _playBot(b),
-                      ),
+                      child: Builder(builder: (context) {
+                        final plusLocked = b['tier'] == 'plus' && _tier == 'free';
+                        final beaten = _beatenBots.contains(b['id']);
+                        final prev = i > 0 ? widget.config.bots[i - 1] : null;
+                        final ladderLocked = !plusLocked && prev != null && !_beatenBots.contains(prev['id']);
+                        return PersonaCard(
+                          name: b['name'] as String,
+                          hometown: b['hometown'] as String,
+                          rating: (b['rating'] as num).toInt(),
+                          catchphrase: b['catchphrase'] as String,
+                          portraitUrl: b['portraitUrl'] as String?,
+                          locked: plusLocked,
+                          ladderLocked: ladderLocked,
+                          beaten: beaten,
+                          lowData: AppSettings.instance.lowData,
+                          onTap: plusLocked
+                              ? () => showSubscriptionSheet(context, _tier)
+                              : ladderLocked
+                                  ? () => ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text('Beat ${prev['name']} first to unlock ${b['name']}.')),
+                                      )
+                                  : () => _playBot(b),
+                        );
+                      }),
                     ),
               ],
             ),

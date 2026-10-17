@@ -8,6 +8,7 @@ import '../auth/two_factor_screen.dart';
 import '../coaching/coaches_screen.dart';
 import '../coaching/my_sessions_screen.dart';
 import '../core/api.dart';
+import '../core/app_config.dart';
 import '../core/hc_widgets.dart';
 import '../core/nigeria_states.dart';
 import '../core/push.dart';
@@ -137,6 +138,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 const SizedBox(height: HcSpace.s5),
               ],
+              _BotLadder(beaten: ((_me?['bots'] as Map?)?['beaten'] as List?)?.cast<String>().toSet() ?? const {}),
+              const SizedBox(height: HcSpace.s5),
               OutlinedButton.icon(
                 onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LeaderboardScreen())),
                 icon: const Icon(Icons.leaderboard_outlined),
@@ -506,6 +509,51 @@ class _SubscriptionRow extends StatelessWidget {
             : Icon(Icons.chevron_right_rounded, color: hc.green),
         onTap: onTap,
       ),
+    );
+  }
+}
+
+/// Bot ladder progress: a badge per bot, filled in once beaten. No design spec exists for
+/// this yet; built with the app's own tokens rather than inventing new chrome.
+class _BotLadder extends StatelessWidget {
+  const _BotLadder({required this.beaten});
+  final Set<String> beaten;
+
+  @override
+  Widget build(BuildContext context) {
+    final bots = AppConfig.current?.bots ?? const [];
+    if (bots.isEmpty) return const SizedBox.shrink();
+    final hc = context.hc;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SectionLabel('Bot ladder', icon: Icons.military_tech_outlined),
+        const SizedBox(height: HcSpace.s1),
+        Text('${beaten.length} of ${bots.length} bots beaten', style: HcText.bodySm.copyWith(color: hc.ink2)),
+        const SizedBox(height: HcSpace.s3),
+        SizedBox(
+          height: 56,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            children: [
+              for (final b in bots)
+                Padding(
+                  padding: const EdgeInsets.only(right: HcSpace.s2),
+                  child: Tooltip(
+                    message: b['name'] as String,
+                    child: CircleAvatar(
+                      radius: 24,
+                      backgroundColor: beaten.contains(b['id']) ? hc.green : hc.surface2,
+                      child: beaten.contains(b['id'])
+                          ? Icon(Icons.military_tech_rounded, color: hc.onGreen)
+                          : Text(hcInitials(b['name'] as String), style: HcText.bodySm.copyWith(color: hc.ink3)),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
