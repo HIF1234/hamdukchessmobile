@@ -413,6 +413,7 @@ class _PlayScreenState extends State<PlayScreen> {
   Future<void> _playBot(Map<String, dynamic> bot) async {
     var side = 'random';
     var timeControl = 'untimed'; // 'untimed', '5+0', '10+0' or '15+10'
+    var assisted = AppSettings.instance.assistedMode;
     final go = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -511,7 +512,18 @@ class _PlayScreenState extends State<PlayScreen> {
                   selected: {timeControl},
                   onSelectionChanged: (s) => set(() => timeControl = s.first),
                 ),
-                const SizedBox(height: HcSpace.s4),
+                const SizedBox(height: HcSpace.s2),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Assisted mode'),
+                  subtitle: const Text('Takebacks, hints and hanging pieces highlighted. Wins don\'t count for the ladder.'),
+                  value: assisted,
+                  onChanged: (v) {
+                    set(() => assisted = v);
+                    AppSettings.instance.setAssistedMode(v);
+                  },
+                ),
+                const SizedBox(height: HcSpace.s2),
                 PlayButton(
                   label: 'Play ${bot['name']}',
                   onPressed: () => Navigator.pop(ctx, true),
@@ -532,6 +544,7 @@ class _PlayScreenState extends State<PlayScreen> {
           bot: bot,
           playWhite: playWhite,
           timeControl: timeControl == 'untimed' ? null : timeControl,
+          assistedMode: assisted,
         ),
       ),
     );
@@ -643,7 +656,7 @@ class _PlayScreenState extends State<PlayScreen> {
     if (play == true && mounted) {
       final playWhite = DateTime.now().millisecond.isEven;
       await Navigator.of(context).push(MaterialPageRoute(
-        builder: (_) => BotGameScreen(bot: matches.first, playWhite: playWhite),
+        builder: (_) => BotGameScreen(bot: matches.first, playWhite: playWhite, assistedMode: AppSettings.instance.assistedMode),
       ));
     }
   }
@@ -1165,6 +1178,7 @@ class _ContinueBotRow extends StatelessWidget {
             bot: persona,
             playWhite: bot.playWhite,
             initialSanMoves: bot.sanMoves,
+            assistedMode: bot.assisted,
             timeControl: bot.timeControl,
             initialWhiteMs: bot.whiteMs,
             initialBlackMs: bot.blackMs,

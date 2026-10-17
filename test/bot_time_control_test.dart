@@ -17,4 +17,15 @@ void main() {
     expect(parseBotTimeControl('5'), isNull);
     expect(parseBotTimeControl('a+b'), isNull);
   });
+
+  test('flipTurnFen swaps the side to move and clears en passant', () {
+    expect(
+      flipTurnFen('rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1'),
+      'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 1',
+    );
+    expect(
+      flipTurnFen('6k1/5ppp/8/8/8/8/5PPP/3R2K1 w - - 0 1'),
+      '6k1/5ppp/8/8/8/8/5PPP/3R2K1 b - - 0 1',
+    );
+  });
 }

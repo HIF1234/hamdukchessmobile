@@ -12,6 +12,7 @@ sealed class ActiveGame {
     required String botId,
     required bool playWhite,
     required List<String> sanMoves,
+    required bool assisted,
     String? timeControl,
     int? whiteMs,
     int? blackMs,
@@ -21,6 +22,7 @@ sealed class ActiveGame {
         'botId': botId,
         'playWhite': playWhite,
         'moves': sanMoves,
+        'assisted': assisted,
         'timeControl': ?timeControl,
         'whiteMs': ?whiteMs,
         'blackMs': ?blackMs,
@@ -47,6 +49,7 @@ sealed class ActiveGame {
           botId: raw['botId'] as String,
           playWhite: raw['playWhite'] as bool,
           sanMoves: (raw['moves'] as List).cast<String>(),
+          assisted: raw['assisted'] as bool? ?? true,
           timeControl: raw['timeControl'] as String?,
           whiteMs: (raw['whiteMs'] as num?)?.toInt(),
           blackMs: (raw['blackMs'] as num?)?.toInt(),
@@ -66,6 +69,7 @@ class BotActiveGame extends ActiveGame {
     required this.botId,
     required this.playWhite,
     required this.sanMoves,
+    required this.assisted,
     this.timeControl,
     this.whiteMs,
     this.blackMs,
@@ -73,6 +77,7 @@ class BotActiveGame extends ActiveGame {
   final String botId;
   final bool playWhite;
   final List<String> sanMoves;
+  final bool assisted;
 
   /// Null means untimed. Remaining ms are resumed as-is (the clock doesn't run while the
   /// app is closed -- there's no server to keep authoritative time for an offline bot game).

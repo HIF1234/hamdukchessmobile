@@ -37,6 +37,11 @@ class AppSettings extends ChangeNotifier {
   /// On by default: move/capture/check/etc. sounds. See lib/core/game_sounds.dart.
   bool sound = true;
 
+  /// On by default for bot games: takebacks, a hint button, and hanging pieces
+  /// highlighted. Turning it off is how a stronger player "plays for real" against bots --
+  /// wins with it on don't count toward the bot ladder.
+  bool assistedMode = true;
+
   Future<void> load() async {
     final j = await (await JsonStore.open()).read(_key);
     if (j is Map) {
@@ -48,6 +53,7 @@ class AppSettings extends ChangeNotifier {
       moveConfirmation = j['moveConfirmation'] == true;
       blindfold = j['blindfold'] == true;
       sound = j['sound'] != false;
+      assistedMode = j['assistedMode'] != false;
     }
   }
 
@@ -99,6 +105,12 @@ class AppSettings extends ChangeNotifier {
     await _save();
   }
 
+  Future<void> setAssistedMode(bool v) async {
+    assistedMode = v;
+    notifyListeners();
+    await _save();
+  }
+
   Future<void> _save() => (JsonStore.open()).then((s) => s.write(_key, {
         'lowData': lowData,
         'language': language,
@@ -108,6 +120,7 @@ class AppSettings extends ChangeNotifier {
         'moveConfirmation': moveConfirmation,
         'blindfold': blindfold,
         'sound': sound,
+        'assistedMode': assistedMode,
       }));
 }
 

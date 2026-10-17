@@ -30,6 +30,17 @@ import 'bot_results.dart';
   return (min * 60000, inc * 1000);
 }
 
+/// The same position with the side to move flipped -- a "null move" probe: what would the
+/// opponent play if it were their turn right now, instead of mine? Clears en passant since
+/// that right doesn't carry over to a position that was never actually reached this way.
+String flipTurnFen(String fen) {
+  final parts = fen.split(' ');
+  if (parts.length < 4) return fen;
+  parts[1] = parts[1] == 'w' ? 'b' : 'w';
+  parts[3] = '-';
+  return parts.join(' ');
+}
+
 /// A game against one of the Naija bots, played entirely on the phone. Stockfish runs as a
 /// separate program; no connection needed.
 class BotGameScreen extends StatefulWidget {
@@ -39,6 +50,7 @@ class BotGameScreen extends StatefulWidget {
     required this.playWhite,
     this.initialSanMoves,
     this.autoHint = false,
+    this.assistedMode = true,
     this.timeControl,
     this.initialWhiteMs,
     this.initialBlackMs,
@@ -50,6 +62,10 @@ class BotGameScreen extends StatefulWidget {
   /// Shows a hint arrow as soon as the engine is ready, unprompted -- for a brand-new
   /// player's very first move, right after onboarding.
   final bool autoHint;
+
+  /// Takebacks, the hint button, and hanging-piece highlights. On by default; a win with
+  /// it off is what counts toward the bot ladder.
+  final bool assistedMode;
 
   /// "5+0", "10+0", "15+10", or null for untimed (the default).
   final String? timeControl;
@@ -71,6 +87,7 @@ class _BotGameScreenState extends State<BotGameScreen> {
   (String, String)? _last;
   String? _lastSan;
   (String, String)? _hintMove;
+  String? _hangingSquare; // assisted mode: one of my own pieces, undefended and attacked
   bool _flipped = false;
   String? _result; // win | loss | draw, once the game ends
   String? _reason;
@@ -140,6 +157,7 @@ class _BotGameScreenState extends State<BotGameScreen> {
       botId: widget.bot['id'] as String,
       playWhite: widget.playWhite,
       sanMoves: _game.getHistory().cast<String>(),
+      assisted: widget.assistedMode,
       timeControl: widget.timeControl,
       whiteMs: _whiteMs,
       blackMs: _blackMs,
@@ -153,6 +171,8 @@ class _BotGameScreenState extends State<BotGameScreen> {
         _botMove();
       } else if (widget.autoHint && _ply == 0) {
         _showHint();
+      } else {
+        _checkHangingPieces();
       }
     } catch (e, st) {
       Telemetry.recordError(e, st, reason: 'engine start');
@@ -187,6 +207,7 @@ class _BotGameScreenState extends State<BotGameScreen> {
       _last = (from, to);
       _lastSan = san;
       _hintMove = null;
+      _hangingSquare = null;
       _ply++;
       _addIncrement(widget.playWhite);
     });
@@ -216,7 +237,7 @@ class _BotGameScreenState extends State<BotGameScreen> {
       _addIncrement(!widget.playWhite);
     });
     _rememberProgress();
-    _checkEnd();
+    if (!_checkEnd()) _checkHangingPieces();
   }
 
   /// A hint from the same engine, at the player's own position, between their moves.
@@ -227,6 +248,27 @@ class _BotGameScreenState extends State<BotGameScreen> {
     try {
       final (best, _) = await engine.analyse(_game.fen, depth: 12, movetimeMs: 500, multiPv: 1);
       if (mounted) setState(() => _hintMove = (best.substring(0, 2), best.substring(2, 4)));
+    } finally {
+      if (mounted) setState(() => _hintLoading = false);
+    }
+  }
+
+  /// Assisted mode: flags one of the player's own pieces if it's undefended and the
+  /// opponent would win material by taking it, right now, before the player's next move.
+  Future<void> _checkHangingPieces() async {
+    if (!widget.assistedMode || _result != null || _hintLoading || _thinking) return;
+    final engine = _engine;
+    if (engine == null) return;
+    setState(() => _hintLoading = true); // shares the engine with Hint; never runs both at once
+    try {
+      final (best, lines) = await engine.analyse(flipTurnFen(_game.fen), depth: 10, movetimeMs: 300, multiPv: 1);
+      if (!mounted || _result != null) return;
+      final to = best.substring(2, 4);
+      final targetIsMine = _game.get(to) != null && (_game.get(to)!.color == ch.Color.WHITE) == widget.playWhite;
+      final score = lines.isEmpty ? 0 : lines.first.score;
+      setState(() => _hangingSquare = targetIsMine && score >= 150 ? to : null);
+    } catch (_) {
+      // Best-effort highlight; nothing else depends on it.
     } finally {
       if (mounted) setState(() => _hintLoading = false);
     }
@@ -245,6 +287,7 @@ class _BotGameScreenState extends State<BotGameScreen> {
       _lastSan = sanHist.isEmpty ? null : sanHist.last;
     });
     _rememberProgress();
+    _checkHangingPieces();
   }
 
   /// Ends the game if the position is over. Returns true when it did.
@@ -281,6 +324,7 @@ class _BotGameScreenState extends State<BotGameScreen> {
       _result = result;
       _reason = reason;
       _hintMove = null;
+      _hangingSquare = null;
     });
     ActiveGame.clear();
     BotResults.add({
@@ -292,6 +336,7 @@ class _BotGameScreenState extends State<BotGameScreen> {
       'playerColor': widget.playWhite ? 'white' : 'black',
       'endReason': reason,
       'ply': _ply,
+      'assisted': widget.assistedMode,
     }).then((_) => BotResults.sync());
     WidgetsBinding.instance.addPostFrameCallback((_) => _showResult());
   }
@@ -316,6 +361,7 @@ class _BotGameScreenState extends State<BotGameScreen> {
       _last = null;
       _lastSan = null;
       _hintMove = null;
+      _hangingSquare = null;
       _result = null;
       _reason = null;
       _ply = 0;
@@ -329,7 +375,11 @@ class _BotGameScreenState extends State<BotGameScreen> {
       _clockTimer = Timer.periodic(const Duration(milliseconds: 250), (_) => _tickClock());
     }
     _rememberProgress();
-    if (!widget.playWhite) _botMove();
+    if (!widget.playWhite) {
+      _botMove();
+    } else {
+      _checkHangingPieces();
+    }
   }
 
   String get _headline => switch (_result) {
@@ -444,6 +494,7 @@ class _BotGameScreenState extends State<BotGameScreen> {
                     lastMove: _last,
                     lastMoveSan: _lastSan,
                     arrow: _hintMove,
+                    dangerSquare: _hangingSquare,
                     onMove: _result == null && !_thinking ? _onMove : null,
                     animate: !AppSettings.instance.lowData,
                   ),
@@ -454,12 +505,18 @@ class _BotGameScreenState extends State<BotGameScreen> {
       bottomNavigationBar: _engineError != null
           ? null
           : GameActionBar(actions: [
-              GameAction(
-                icon: Icons.lightbulb_outline_rounded,
-                label: 'Hint',
-                onTap: _result == null && !_thinking && !_hintLoading ? _showHint : null,
-              ),
-              GameAction(icon: Icons.undo_rounded, label: 'Take back', onTap: _result == null && !_thinking && _ply >= 2 ? _takeBack : null),
+              if (widget.assistedMode)
+                GameAction(
+                  icon: Icons.lightbulb_outline_rounded,
+                  label: 'Hint',
+                  onTap: _result == null && !_thinking && !_hintLoading ? _showHint : null,
+                ),
+              if (widget.assistedMode)
+                GameAction(
+                  icon: Icons.undo_rounded,
+                  label: 'Take back',
+                  onTap: _result == null && !_thinking && _ply >= 2 ? _takeBack : null,
+                ),
               GameAction(icon: Icons.swap_vert_rounded, label: 'Flip', onTap: () => setState(() => _flipped = !_flipped)),
               GameAction(icon: Icons.flag_rounded, label: 'Resign', onTap: _result == null && _ply >= 2 ? _confirmResign : null),
             ]),

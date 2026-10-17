@@ -29,6 +29,7 @@ class ChessBoardView extends StatefulWidget {
     this.onMove,
     this.lastMove,
     this.hintSquare,
+    this.dangerSquare,
     this.playerColor,
     this.onPremove,
     this.onCancelPremove,
@@ -46,6 +47,10 @@ class ChessBoardView extends StatefulWidget {
   final MoveHandler? onMove;
   final (String, String)? lastMove;
   final String? hintSquare;
+
+  /// Assisted mode: a square to ring in the board's "check" colour -- reused here for "this
+  /// piece is undefended and attacked," not an actual check.
+  final String? dangerSquare;
 
   /// 'w' or 'b': the side this player controls. Null means whoever is to move (puzzles).
   final String? playerColor;
@@ -360,6 +365,7 @@ class _ChessBoardViewState extends State<ChessBoardView> with SingleTickerProvid
                   if (widget.lastMove != null) widget.lastMove!.$1: board.lastMove,
                   if (widget.lastMove != null) widget.lastMove!.$2: board.lastMove,
                   ?widget.hintSquare: board.selected,
+                  ?widget.dangerSquare: board.check,
                   for (final p in widget.premoveQueue) p.$1: board.premove,
                   for (final p in widget.premoveQueue) p.$2: board.premove,
                   ?_selectedSq: _selectingPremove ? board.premove : board.selected,
