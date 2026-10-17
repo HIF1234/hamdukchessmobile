@@ -10,8 +10,10 @@ class IncomingLinks {
 
   final _challenges = StreamController<String>.broadcast();
   final _games = StreamController<String>.broadcast();
+  final _dailyPuzzle = StreamController<void>.broadcast();
   String? _pending; // arrived before the app could show it (e.g. while signed out)
   String? _pendingGame;
+  bool _pendingDailyPuzzle = false;
   Uri? _last;
   DateTime _lastAt = DateTime(0);
 
@@ -21,9 +23,18 @@ class IncomingLinks {
   /// Game ids to open (from tapped notifications such as "Your move").
   Stream<String> get games => _games.stream;
 
+  /// Fires when the "today's puzzle is ready" / "keep your streak" notification is tapped.
+  Stream<void> get dailyPuzzle => _dailyPuzzle.stream;
+
   String? takePendingGame() {
     final p = _pendingGame;
     _pendingGame = null;
+    return p;
+  }
+
+  bool takePendingDailyPuzzle() {
+    final p = _pendingDailyPuzzle;
+    _pendingDailyPuzzle = false;
     return p;
   }
 
@@ -51,6 +62,14 @@ class IncomingLinks {
     if (uri == _last && now.difference(_lastAt) < const Duration(seconds: 5)) return;
     _last = uri;
     _lastAt = now;
+    if (isDailyPuzzlePath(uri)) {
+      if (_dailyPuzzle.hasListener) {
+        _dailyPuzzle.add(null);
+      } else {
+        _pendingDailyPuzzle = true;
+      }
+      return;
+    }
     final game = gameIdFrom(uri);
     if (game != null) {
       if (_games.hasListener) {
@@ -84,6 +103,11 @@ String? challengeIdFrom(Uri uri) => _idAfter(uri, 'challenge');
 
 /// The game id in a game link (/play/{id}), or null if it isn't one.
 String? gameIdFrom(Uri uri) => _idAfter(uri, 'play');
+
+/// True for the daily puzzle link (/puzzles/daily), from the daily puzzle / streak
+/// reminder push notifications.
+bool isDailyPuzzlePath(Uri uri) =>
+    uri.host == 'play.chess.hamduk.com.ng' && uri.pathSegments.join('/') == 'puzzles/daily';
 
 final _username = RegExp(r'^[a-z0-9_]{3,20}$');
 

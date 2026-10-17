@@ -36,6 +36,13 @@ void main() {
       expect(challengeIdFrom(Uri.parse('https://play.chess.hamduk.com.ng/challenge/not-an-id')), isNull);
       expect(challengeIdFrom(Uri.parse('https://play.chess.hamduk.com.ng/challenge/$id/extra')), isNull);
     });
+
+    test('daily puzzle links (from push notifications) are recognised', () {
+      expect(isDailyPuzzlePath(Uri.parse('https://play.chess.hamduk.com.ng/puzzles/daily')), isTrue);
+      expect(isDailyPuzzlePath(Uri.parse('https://evil.example.com/puzzles/daily')), isFalse);
+      expect(isDailyPuzzlePath(Uri.parse('https://play.chess.hamduk.com.ng/puzzles/daily/2026-10-17')), isFalse);
+      expect(isDailyPuzzlePath(Uri.parse('https://play.chess.hamduk.com.ng/play/$id')), isFalse);
+    });
   });
 
   group('sign-in screen', () {

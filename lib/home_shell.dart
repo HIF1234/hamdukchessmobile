@@ -46,6 +46,7 @@ class _HomeShellState extends State<HomeShell> {
   int _tab = 0;
   StreamSubscription<String>? _links;
   StreamSubscription<String>? _gameLinks;
+  StreamSubscription<void>? _dailyPuzzleLinks;
   bool _offlineBannerDismissed = false;
   bool _updateBannerDismissed = false;
 
@@ -68,6 +69,11 @@ class _HomeShellState extends State<HomeShell> {
     _gameLinks = IncomingLinks.instance.games.listen(_openGame);
     final pendingGame = IncomingLinks.instance.takePendingGame();
     if (pendingGame != null) WidgetsBinding.instance.addPostFrameCallback((_) => _openGame(pendingGame));
+    // Tapped daily puzzle / streak reminder notifications open the daily puzzle.
+    _dailyPuzzleLinks = IncomingLinks.instance.dailyPuzzle.listen((_) => _openDailyPuzzle());
+    if (IncomingLinks.instance.takePendingDailyPuzzle()) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _openDailyPuzzle());
+    }
     _maybeStartPush();
     WidgetsBinding.instance.addPostFrameCallback((_) => _maybePromptPasskey());
     WidgetsBinding.instance.addPostFrameCallback((_) => _maybeResumeGame());
@@ -262,10 +268,16 @@ class _HomeShellState extends State<HomeShell> {
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => ChallengeAcceptScreen(challengeId: id)));
   }
 
+  void _openDailyPuzzle() {
+    if (!mounted) return;
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DailyPuzzleScreen()));
+  }
+
   @override
   void dispose() {
     _links?.cancel();
     _gameLinks?.cancel();
+    _dailyPuzzleLinks?.cancel();
     _connectivity?.cancel();
     _presenceTimer?.cancel();
     _badgeTimer?.cancel();
