@@ -30,8 +30,10 @@ void main() {
     });
 
     test('a bot plays a legal-looking move from a real position', () async {
-      final move = await BotBrain(style, Random(1)).chooseMove(engine, 'rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2', 3);
+      final (move, score) =
+          await BotBrain(style, Random(1)).chooseMove(engine, 'rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2', 3);
       expect(move, matches(RegExp(r'^[a-h][1-8][a-h][1-8][qrbn]?$')));
+      expect(score, isNotNull);
     });
   }, skip: haveEngine ? false : 'Run engine/build.sh first to build the test engine');
 
@@ -43,7 +45,9 @@ void main() {
       // No engine needed for book moves.
       final seen = <String>{};
       for (var i = 0; i < 20; i++) {
-        seen.add(await brain.chooseMove(_NoEngine(), 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', 0));
+        final (move, score) = await brain.chooseMove(_NoEngine(), 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', 0);
+        expect(score, isNull); // book moves never search
+        seen.add(move);
       }
       expect(seen, {'e2e4', 'd2d4'});
     });

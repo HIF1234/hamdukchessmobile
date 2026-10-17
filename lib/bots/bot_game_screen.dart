@@ -92,6 +92,10 @@ class _BotGameScreenState extends State<BotGameScreen> {
   String? _result; // win | loss | draw, once the game ends
   String? _reason;
   int _ply = 0;
+  int? _preMoveScore; // the opponent's eval of the position just before my move, for blunder detection
+  String? _botLine; // a personality line, shown in place of the bot's status briefly
+
+  bool get _pidgin => AppSettings.instance.language == 'pcm';
 
   late int? _baseMs;
   late int _incMs;
@@ -208,6 +212,7 @@ class _BotGameScreenState extends State<BotGameScreen> {
       _lastSan = san;
       _hintMove = null;
       _hangingSquare = null;
+      _botLine = null;
       _ply++;
       _addIncrement(widget.playWhite);
     });
@@ -221,7 +226,8 @@ class _BotGameScreenState extends State<BotGameScreen> {
     if (engine == null) return;
     setState(() => _thinking = true);
     final started = DateTime.now();
-    final uci = await _brain.chooseMove(engine, _game.fen, _ply);
+    final preMoveScore = _preMoveScore;
+    final (uci, postMoveScore) = await _brain.chooseMove(engine, _game.fen, _ply);
     // A short pause so instant replies from weak bots don't feel robotic.
     final spent = DateTime.now().difference(started);
     if (spent < const Duration(milliseconds: 400)) await Future.delayed(const Duration(milliseconds: 400) - spent);
@@ -229,12 +235,17 @@ class _BotGameScreenState extends State<BotGameScreen> {
     _game.move({'from': uci.substring(0, 2), 'to': uci.substring(2, 4), 'promotion': uci.length > 4 ? uci[4] : null});
     final san = _game.getHistory().cast<String>().last;
     GameFeedback.on(eventForSan(san, mine: false));
+    // The player's own blunder, not the bot's -- a cpLoss jump between the opponent's eval
+    // of the position just before vs just after the player's move (both from the same,
+    // non-mover side's point of view, so they're directly comparable).
+    final cpLoss = (preMoveScore != null && postMoveScore != null) ? postMoveScore - preMoveScore : 0;
     setState(() {
       _last = (uci.substring(0, 2), uci.substring(2, 4));
       _lastSan = san;
       _ply++;
       _thinking = false;
       _addIncrement(!widget.playWhite);
+      if (cpLoss >= 200) _botLine = _pidgin ? widget.bot['blunderLinePidgin'] as String? : widget.bot['blunderLine'] as String?;
     });
     _rememberProgress();
     if (!_checkEnd()) _checkHangingPieces();
@@ -256,16 +267,20 @@ class _BotGameScreenState extends State<BotGameScreen> {
   /// Assisted mode: flags one of the player's own pieces if it's undefended and the
   /// opponent would win material by taking it, right now, before the player's next move.
   Future<void> _checkHangingPieces() async {
-    if (!widget.assistedMode || _result != null || _hintLoading || _thinking) return;
+    if (_result != null || _hintLoading || _thinking) return;
     final engine = _engine;
     if (engine == null) return;
     setState(() => _hintLoading = true); // shares the engine with Hint; never runs both at once
     try {
       final (best, lines) = await engine.analyse(flipTurnFen(_game.fen), depth: 10, movetimeMs: 300, multiPv: 1);
       if (!mounted || _result != null) return;
+      final score = lines.isEmpty ? 0 : lines.first.score;
+      // Captured regardless of assistedMode: it's also the "before" baseline for live
+      // blunder detection, which happens whether or not the highlight itself is shown.
+      _preMoveScore = score;
+      if (!widget.assistedMode) return;
       final to = best.substring(2, 4);
       final targetIsMine = _game.get(to) != null && (_game.get(to)!.color == ch.Color.WHITE) == widget.playWhite;
-      final score = lines.isEmpty ? 0 : lines.first.score;
       setState(() => _hangingSquare = targetIsMine && score >= 150 ? to : null);
     } catch (_) {
       // Best-effort highlight; nothing else depends on it.
@@ -281,6 +296,7 @@ class _BotGameScreenState extends State<BotGameScreen> {
       _game.undo(); // the player's move
       _ply -= 2;
       _hintMove = null;
+      _botLine = null;
       final hist = _game.getHistory({'verbose': true});
       _last = hist.isEmpty ? null : ((hist.last as Map)['from'] as String, (hist.last as Map)['to'] as String);
       final sanHist = _game.getHistory().cast<String>();
@@ -320,11 +336,13 @@ class _BotGameScreenState extends State<BotGameScreen> {
     if (_result != null) return; // the clock timer can race a move/resign that already ended it
     GameFeedback.on(GameEvent.gameEnd);
     _clockTimer?.cancel();
+    final wonByCheckmate = result == 'loss' && reason == 'checkmate';
     setState(() {
       _result = result;
       _reason = reason;
       _hintMove = null;
       _hangingSquare = null;
+      _botLine = wonByCheckmate ? (_pidgin ? widget.bot['checkmateLinePidgin'] as String? : widget.bot['checkmateLine'] as String?) : null;
     });
     ActiveGame.clear();
     BotResults.add({
@@ -362,6 +380,8 @@ class _BotGameScreenState extends State<BotGameScreen> {
       _lastSan = null;
       _hintMove = null;
       _hangingSquare = null;
+      _botLine = null;
+      _preMoveScore = null;
       _result = null;
       _reason = null;
       _ply = 0;
@@ -389,7 +409,9 @@ class _BotGameScreenState extends State<BotGameScreen> {
       };
 
   String get _detail => switch (_reason) {
-        'checkmate' => _result == 'win' ? 'By checkmate against $_name.' : '$_name wins by checkmate.',
+        'checkmate' => _result == 'win'
+            ? 'By checkmate against $_name.'
+            : '$_name wins by checkmate. “$_botLine”',
         'stalemate' => 'By stalemate.',
         'insufficient material' => 'By insufficient material.',
         'repetition' => 'By repetition.',
@@ -484,7 +506,11 @@ class _BotGameScreenState extends State<BotGameScreen> {
                       stage: hcStageFor(_rating),
                       imageUrl: AppSettings.instance.lowData ? null : widget.bot['portraitUrl'] as String?,
                     ),
-                    status: _thinking ? '$_name is thinking…' : (_ply == 0 ? '“${widget.bot['catchphrase']}”' : null),
+                    status: _thinking
+                        ? '$_name is thinking…'
+                        : _botLine != null
+                            ? '“$_botLine”'
+                            : (_ply == 0 ? '“${_pidgin ? widget.bot['catchphrasePidgin'] : widget.bot['catchphrase']}”' : null),
                     clock: _clockWidget(!widget.playWhite),
                   ),
                   ChessBoardView(

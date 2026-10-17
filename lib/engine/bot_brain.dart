@@ -58,13 +58,15 @@ class BotBrain {
     return noised.first.move;
   }
 
-  /// The bot's move in [fen]. [ply] is the number of moves played so far.
-  Future<String> chooseMove(UciEngine engine, String fen, int ply) async {
+  /// The bot's move in [fen], and Stockfish's own top-line score (centipawns, from the
+  /// bot's point of view) for live blunder detection -- null from the opening book, where
+  /// no search ran. [ply] is the number of moves played so far.
+  Future<(String, int?)> chooseMove(UciEngine engine, String fen, int ply) async {
     // A tiny opening book: White's first move comes from the bot's favourites.
     if (ply == 0 && fen.split(' ')[1] == 'w' && style.openingRepertoire.isNotEmpty) {
-      return style.openingRepertoire[_rng.nextInt(style.openingRepertoire.length)];
+      return (style.openingRepertoire[_rng.nextInt(style.openingRepertoire.length)], null);
     }
     final (best, lines) = await engine.analyse(fen, depth: pickDepth(), movetimeMs: style.movetimeMs);
-    return pickFromPvs(lines) ?? best;
+    return (pickFromPvs(lines) ?? best, lines.isEmpty ? null : lines.first.score);
   }
 }
