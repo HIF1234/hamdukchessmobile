@@ -13,6 +13,7 @@ sealed class ActiveGame {
     required bool playWhite,
     required List<String> sanMoves,
     required bool assisted,
+    String? startFen,
     String? timeControl,
     int? whiteMs,
     int? blackMs,
@@ -23,6 +24,7 @@ sealed class ActiveGame {
         'playWhite': playWhite,
         'moves': sanMoves,
         'assisted': assisted,
+        'startFen': ?startFen,
         'timeControl': ?timeControl,
         'whiteMs': ?whiteMs,
         'blackMs': ?blackMs,
@@ -50,6 +52,7 @@ sealed class ActiveGame {
           playWhite: raw['playWhite'] as bool,
           sanMoves: (raw['moves'] as List).cast<String>(),
           assisted: raw['assisted'] as bool? ?? true,
+          startFen: raw['startFen'] as String?,
           timeControl: raw['timeControl'] as String?,
           whiteMs: (raw['whiteMs'] as num?)?.toInt(),
           blackMs: (raw['blackMs'] as num?)?.toInt(),
@@ -70,6 +73,7 @@ class BotActiveGame extends ActiveGame {
     required this.playWhite,
     required this.sanMoves,
     required this.assisted,
+    this.startFen,
     this.timeControl,
     this.whiteMs,
     this.blackMs,
@@ -78,6 +82,9 @@ class BotActiveGame extends ActiveGame {
   final bool playWhite;
   final List<String> sanMoves;
   final bool assisted;
+
+  /// "Play from a position" (see BotGameScreen.startFen); null means the standard start.
+  final String? startFen;
 
   /// Null means untimed. Remaining ms are resumed as-is (the clock doesn't run while the
   /// app is closed -- there's no server to keep authoritative time for an offline bot game).

@@ -49,6 +49,7 @@ class BotGameScreen extends StatefulWidget {
     required this.bot,
     required this.playWhite,
     this.initialSanMoves,
+    this.startFen,
     this.autoHint = false,
     this.assistedMode = true,
     this.timeControl,
@@ -59,6 +60,9 @@ class BotGameScreen extends StatefulWidget {
   final bool playWhite;
   /// When resuming a game the app closed mid-way through (see [ActiveGame]).
   final List<String>? initialSanMoves;
+  /// "Play from a position" (analysis/review or a finished lesson). Null starts from the
+  /// standard position. [initialSanMoves], if also set, replay on top of this.
+  final String? startFen;
   /// Shows a hint arrow as soon as the engine is ready, unprompted -- for a brand-new
   /// player's very first move, right after onboarding.
   final bool autoHint;
@@ -78,7 +82,7 @@ class BotGameScreen extends StatefulWidget {
 }
 
 class _BotGameScreenState extends State<BotGameScreen> {
-  late ch.Chess _game = ch.Chess();
+  late ch.Chess _game = widget.startFen != null ? ch.Chess.fromFEN(widget.startFen!, check_validity: false) : ch.Chess();
   late final BotBrain _brain = BotBrain(BotStyle.fromConfig((widget.bot['engine'] as Map).cast<String, dynamic>()));
   UciEngine? _engine;
   String? _engineError;
@@ -162,6 +166,7 @@ class _BotGameScreenState extends State<BotGameScreen> {
       playWhite: widget.playWhite,
       sanMoves: _game.getHistory().cast<String>(),
       assisted: widget.assistedMode,
+      startFen: widget.startFen,
       timeControl: widget.timeControl,
       whiteMs: _whiteMs,
       blackMs: _blackMs,
@@ -375,7 +380,7 @@ class _BotGameScreenState extends State<BotGameScreen> {
 
   void _newGame() {
     setState(() {
-      _game = ch.Chess();
+      _game = widget.startFen != null ? ch.Chess.fromFEN(widget.startFen!, check_validity: false) : ch.Chess();
       _last = null;
       _lastSan = null;
       _hintMove = null;
@@ -453,7 +458,7 @@ class _BotGameScreenState extends State<BotGameScreen> {
                   child: FilledButton.tonal(
                     onPressed: () => Navigator.of(context).push(MaterialPageRoute(
                       builder: (_) => ReviewScreen(
-                        startFen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+                        startFen: widget.startFen ?? 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
                         sanMoves: _game.getHistory().cast<String>(),
                         whiteAtBottom: widget.playWhite,
                       ),

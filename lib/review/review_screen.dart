@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../board/chess_board.dart';
+import '../bots/bot_picker.dart';
 import '../core/api.dart';
 import '../core/hc_widgets.dart';
 import '../core/keep_screen_on.dart';
@@ -195,6 +196,12 @@ class _ReviewScreenState extends State<ReviewScreen> {
               onSelected: (_) => setState(() => _selected = i),
             ),
         ]),
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+          onPressed: () => playBotFromPosition(context, fen: m?.fenAfter ?? widget.startFen, playWhite: widget.whiteAtBottom),
+          icon: const Icon(Icons.smart_toy_outlined),
+          label: const Text('Play from here vs a bot'),
+        ),
         const SizedBox(height: 8),
         Text('Stockfish 11 at depth ${r.depth}, on your phone.', style: t.textTheme.bodySmall),
       ],

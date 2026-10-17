@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../board/chess_board.dart';
+import '../bots/bot_picker.dart';
 
 /// Plays through one tutorial's steps: "observe" positions just need Next, "move" positions
 /// require the player to find the right move before advancing. Data comes from GET
@@ -92,6 +93,19 @@ class _TutorialScreenState extends State<TutorialScreen> {
             Text('Correct!', style: TextStyle(color: t.colorScheme.primary, fontWeight: FontWeight.bold)),
           ],
           const SizedBox(height: 20),
+          if (_i >= _steps.length - 1 && (!_isMove || _solved))
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: OutlinedButton.icon(
+                onPressed: () => playBotFromPosition(
+                  context,
+                  fen: step['fen'] as String,
+                  playWhite: (step['fen'] as String).split(' ')[1] == 'w',
+                ),
+                icon: const Icon(Icons.smart_toy_outlined),
+                label: const Text('Play it out vs a bot'),
+              ),
+            ),
           Row(children: [
             if (_isMove && !_solved)
               TextButton(onPressed: () => setState(() => _showHint = true), child: const Text('Hint')),

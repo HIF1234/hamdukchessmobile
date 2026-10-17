@@ -1179,6 +1179,7 @@ class _ContinueBotRow extends StatelessWidget {
             playWhite: bot.playWhite,
             initialSanMoves: bot.sanMoves,
             assistedMode: bot.assisted,
+            startFen: bot.startFen,
             timeControl: bot.timeControl,
             initialWhiteMs: bot.whiteMs,
             initialBlackMs: bot.blackMs,
