@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../board/chess_board.dart';
+import '../core/api.dart';
 import '../core/hc_widgets.dart';
 import '../core/keep_screen_on.dart';
 import '../core/settings.dart';
@@ -53,10 +54,35 @@ class _ReviewScreenState extends State<ReviewScreen> {
         },
         isCancelled: () => _cancelled,
       );
-      if (mounted && r != null) setState(() => _result = r);
+      if (mounted && r != null) {
+        setState(() => _result = r);
+        _savePersonalPuzzles(r);
+      }
     } catch (e, st) {
       Telemetry.recordError(e, st, reason: 'game review');
       if (mounted) setState(() => _error = "The review couldn't run on this phone.");
+    }
+  }
+
+  /// "Puzzles from your games": saves this player's own blunders (not the opponent's) as
+  /// personal training material under Puzzles ▸ From your games.
+  Future<void> _savePersonalPuzzles(ReviewResult r) async {
+    final blunders = [
+      for (final m in r.moves)
+        if (m.classification == Classification.blunder && m.white == widget.whiteAtBottom && m.bestMove != null)
+          {'fen': m.fenBefore, 'bestMove': m.bestMove},
+    ];
+    if (blunders.isEmpty) return;
+    try {
+      final res = await Api.instance.post('/puzzles/from-games', {'blunders': blunders}) as Map;
+      final added = (res['added'] as num?)?.toInt() ?? 0;
+      if (added > 0 && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$added puzzle${added == 1 ? '' : 's'} from this game added to Puzzles.')),
+        );
+      }
+    } on ApiError {
+      // Best-effort; the review itself already shows regardless.
     }
   }
 
