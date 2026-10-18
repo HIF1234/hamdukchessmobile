@@ -36,6 +36,7 @@ class ChessBoardView extends StatefulWidget {
     this.premoveQueue = const [],
     this.animate = true,
     this.arrow,
+    this.arrows = const [],
     this.lastMoveSan,
     this.confirmMoves = false,
   });
@@ -67,6 +68,10 @@ class ChessBoardView extends StatefulWidget {
 
   /// A move to draw as an arrow (e.g. the second-tier puzzle hint).
   final (String, String)? arrow;
+
+  /// Several engine lines at once (review's "best-move arrows"), best first; each one
+  /// drawn lighter than the last so the best move stands out.
+  final List<(String, String)> arrows;
 
   /// The last move in SAN (e.g. "Nxe5+"), announced to the screen reader when it changes.
   final String? lastMoveSan;
@@ -415,6 +420,18 @@ class _ChessBoardViewState extends State<ChessBoardView> with SingleTickerProvid
                     from: _origin(widget.arrow!.$1, size).translate(sq / 2, sq / 2),
                     to: _origin(widget.arrow!.$2, size).translate(sq / 2, sq / 2),
                     width: sq * 0.14,
+                  ),
+                ),
+              ),
+            for (final (i, a) in widget.arrows.indexed)
+              IgnorePointer(
+                child: CustomPaint(
+                  size: Size.square(size),
+                  painter: _ArrowPainter(
+                    color: board.arrow.withValues(alpha: 1 - i * 0.22),
+                    from: _origin(a.$1, size).translate(sq / 2, sq / 2),
+                    to: _origin(a.$2, size).translate(sq / 2, sq / 2),
+                    width: sq * (0.14 - i * 0.025),
                   ),
                 ),
               ),

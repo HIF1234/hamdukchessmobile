@@ -204,4 +204,14 @@ void main() {
     await pump(t, const ChessBoardView(fen: start));
     expect(find.byType(ChessBoardView), findsOneWidget);
   });
+
+  testWidgets('several best-move arrows render without crashing', (t) async {
+    await pump(
+      t,
+      const ChessBoardView(fen: start, arrows: [('e2', 'e4'), ('d2', 'd4'), ('g1', 'f3'), ('c2', 'c4')]),
+    );
+    expect(find.byType(ChessBoardView), findsOneWidget);
+    await pump(t, const ChessBoardView(fen: start, arrows: []));
+    expect(find.byType(ChessBoardView), findsOneWidget);
+  });
 }

@@ -32,6 +32,13 @@ class _ReviewScreenState extends State<ReviewScreen> {
   int _done = 0;
   int _selected = -1; // -1 = starting position
   bool _cancelled = false;
+  List<(String, String)>? _bestArrows; // best-move arrows for the selected position
+  bool _arrowsLoading = false;
+
+  void _select(int i) => setState(() {
+        _selected = i;
+        _bestArrows = null;
+      });
 
   @override
   void initState() {
@@ -88,6 +95,22 @@ class _ReviewScreenState extends State<ReviewScreen> {
     }
   }
 
+  /// The engine's best move and its next three alternatives for the position before the
+  /// selected move, as arrows -- instead of only "Best was Nf3" as text.
+  Future<void> _showBestMoves(MoveReview m) async {
+    final engine = _engine;
+    if (engine == null || _arrowsLoading) return;
+    setState(() => _arrowsLoading = true);
+    try {
+      final (_, lines) = await engine.analyse(m.fenBefore, depth: 12, movetimeMs: 600, multiPv: 4);
+      if (mounted) {
+        setState(() => _bestArrows = [for (final l in lines) (l.move.substring(0, 2), l.move.substring(2, 4))]);
+      }
+    } finally {
+      if (mounted) setState(() => _arrowsLoading = false);
+    }
+  }
+
   @override
   void dispose() {
     KeepScreenOn.pop();
@@ -140,13 +163,14 @@ class _ReviewScreenState extends State<ReviewScreen> {
     return ListView(
       padding: const EdgeInsets.all(12),
       children: [
-        _EvalGraph(moves: r.moves, selected: _selected, onSelect: (i) => setState(() => _selected = i)),
+        _EvalGraph(moves: r.moves, selected: _selected, onSelect: _select),
         const SizedBox(height: 8),
         ChessBoardView(
-          fen: m?.fenAfter ?? widget.startFen,
+          fen: _bestArrows != null && m != null ? m.fenBefore : (m?.fenAfter ?? widget.startFen),
           whiteAtBottom: widget.whiteAtBottom,
-          lastMove: m == null ? null : (m.uci.substring(0, 2), m.uci.substring(2, 4)),
-          lastMoveSan: m?.san,
+          lastMove: _bestArrows != null ? null : (m == null ? null : (m.uci.substring(0, 2), m.uci.substring(2, 4))),
+          lastMoveSan: _bestArrows != null ? null : m?.san,
+          arrows: _bestArrows ?? const [],
           animate: !AppSettings.instance.lowData,
         ),
         const SizedBox(height: 8),
@@ -162,13 +186,22 @@ class _ReviewScreenState extends State<ReviewScreen> {
                       style: t.textTheme.titleMedium),
                 ]),
                 Text('Evaluation ${_eval(m.evalAfter)}'),
-                if (m.classification.index >= Classification.inaccuracy.index && m.bestSan != null)
+                if (m.classification.index >= Classification.inaccuracy.index && m.bestSan != null) ...[
                   Text('Best was ${m.bestSan}'),
+                  const SizedBox(height: 4),
+                  OutlinedButton.icon(
+                    onPressed: _arrowsLoading ? null : () => _showBestMoves(m),
+                    icon: _arrowsLoading
+                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.north_east_rounded, size: 16),
+                    label: Text(_bestArrows != null ? 'Showing best moves' : 'Show best moves'),
+                  ),
+                ],
               ]),
             ),
           ),
         Row(children: [
-          IconButton(onPressed: _selected < 0 ? null : () => setState(() => _selected--), icon: const Icon(Icons.chevron_left)),
+          IconButton(onPressed: _selected < 0 ? null : () => _select(_selected - 1), icon: const Icon(Icons.chevron_left)),
           Expanded(
             child: Text(
               'Accuracy: White ${r.accuracyWhite}% · Black ${r.accuracyBlack}%',
@@ -176,7 +209,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
             ),
           ),
           IconButton(
-              onPressed: _selected >= r.moves.length - 1 ? null : () => setState(() => _selected++),
+              onPressed: _selected >= r.moves.length - 1 ? null : () => _select(_selected + 1),
               icon: const Icon(Icons.chevron_right)),
         ]),
         Text(
@@ -198,7 +231,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
                 Text('${mv.white ? '${(mv.ply + 1) ~/ 2}.' : ''}${mv.san}'),
               ]),
               selected: _selected == i,
-              onSelected: (_) => setState(() => _selected = i),
+              onSelected: (_) => _select(i),
             ),
         ]),
         const SizedBox(height: 12),
