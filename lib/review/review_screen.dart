@@ -1,3 +1,4 @@
+import 'package:chess/chess.dart' as ch;
 import 'package:flutter/material.dart';
 
 import '../board/chess_board.dart';
@@ -10,6 +11,7 @@ import '../core/telemetry.dart';
 import '../core/theme.dart';
 import '../engine/device.dart';
 import '../engine/uci_engine.dart';
+import '../puzzles/puzzle_session.dart';
 import 'game_review.dart';
 
 /// Move-by-move review of a finished game, run by Stockfish on the phone. Depth follows the
@@ -35,10 +37,64 @@ class _ReviewScreenState extends State<ReviewScreen> {
   List<(String, String)>? _bestArrows; // best-move arrows for the selected position
   bool _arrowsLoading = false;
 
+  // "Explore lines": a free branch off the review, the player's own moves scored by the
+  // engine, independent of the real game. Null means not exploring.
+  ch.Chess? _exploreGame;
+  List<(String san, int evalCp)> _exploreMoves = []; // evalCp from White's POV
+  bool _exploreThinking = false;
+
   void _select(int i) => setState(() {
         _selected = i;
         _bestArrows = null;
       });
+
+  String _positionFen(MoveReview? m) => _bestArrows != null && m != null ? m.fenBefore : (m?.fenAfter ?? widget.startFen);
+
+  void _startExploring(MoveReview? m) => setState(() {
+        _exploreGame = ch.Chess.fromFEN(_positionFen(m), check_validity: false);
+        _exploreMoves = [];
+        _bestArrows = null;
+      });
+
+  void _stopExploring() => setState(() {
+        _exploreGame = null;
+        _exploreMoves = [];
+      });
+
+  bool _onExploreMove(String from, String to, String? promo) {
+    final g = _exploreGame;
+    final engine = _engine;
+    if (g == null || engine == null || _exploreThinking) return false;
+    if (!g.move({'from': from, 'to': to, 'promotion': promo ?? 'q'})) return false;
+    final san = g.getHistory().cast<String>().last;
+    setState(() {
+      _exploreMoves = [..._exploreMoves, (san, 0)];
+      _exploreThinking = true;
+    });
+    _evaluateExploreMove(g, engine);
+    return true;
+  }
+
+  Future<void> _evaluateExploreMove(ch.Chess g, UciEngine engine) async {
+    try {
+      if (g.in_checkmate) {
+        _setLastExploreEval(g.turn == ch.Color.WHITE ? -100000 : 100000);
+      } else if (g.in_stalemate || g.insufficient_material) {
+        _setLastExploreEval(0);
+      } else {
+        final (_, lines) = await engine.analyse(g.fen, depth: 12, movetimeMs: 500, multiPv: 1);
+        final stm = lines.isEmpty ? 0 : lines.first.score;
+        _setLastExploreEval(g.turn == ch.Color.WHITE ? stm : -stm);
+      }
+    } finally {
+      if (mounted) setState(() => _exploreThinking = false);
+    }
+  }
+
+  void _setLastExploreEval(int whiteCp) {
+    if (!mounted || _exploreMoves.isEmpty) return;
+    setState(() => _exploreMoves[_exploreMoves.length - 1] = (_exploreMoves.last.$1, whiteCp));
+  }
 
   @override
   void initState() {
@@ -163,101 +219,141 @@ class _ReviewScreenState extends State<ReviewScreen> {
     return ListView(
       padding: const EdgeInsets.all(12),
       children: [
-        _EvalGraph(moves: r.moves, selected: _selected, onSelect: _select),
+        if (_exploreGame == null) _EvalGraph(moves: r.moves, selected: _selected, onSelect: _select),
         const SizedBox(height: 8),
         ChessBoardView(
-          fen: _bestArrows != null && m != null ? m.fenBefore : (m?.fenAfter ?? widget.startFen),
+          fen: _exploreGame?.fen ?? _positionFen(m),
           whiteAtBottom: widget.whiteAtBottom,
-          lastMove: _bestArrows != null ? null : (m == null ? null : (m.uci.substring(0, 2), m.uci.substring(2, 4))),
-          lastMoveSan: _bestArrows != null ? null : m?.san,
+          onMove: _exploreGame != null && !_exploreThinking ? _onExploreMove : null,
+          lastMove: _exploreGame != null || _bestArrows != null
+              ? null
+              : (m == null ? null : (m.uci.substring(0, 2), m.uci.substring(2, 4))),
+          lastMoveSan: _exploreGame != null || _bestArrows != null ? null : m?.san,
           arrows: _bestArrows ?? const [],
           animate: !AppSettings.instance.lowData,
         ),
         const SizedBox(height: 8),
-        if (m != null)
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Row(children: [
-                  ReviewBadge(kind: m.classification.name),
-                  const SizedBox(width: 8),
-                  Text('${(m.ply + 1) ~/ 2}${m.white ? '.' : '...'} ${m.san}  ${m.classification.label}',
-                      style: t.textTheme.titleMedium),
-                ]),
-                Text('Evaluation ${_eval(m.evalAfter)}'),
-                if (m.classification.index >= Classification.inaccuracy.index && m.bestSan != null) ...[
-                  Text('Best was ${m.bestSan}'),
-                  const SizedBox(height: 4),
-                  OutlinedButton.icon(
-                    onPressed: _arrowsLoading ? null : () => _showBestMoves(m),
-                    icon: _arrowsLoading
-                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Icon(Icons.north_east_rounded, size: 16),
-                    label: Text(_bestArrows != null ? 'Showing best moves' : 'Show best moves'),
-                  ),
-                ],
-              ]),
-            ),
-          ),
-        Row(children: [
-          IconButton(onPressed: _selected < 0 ? null : () => _select(_selected - 1), icon: const Icon(Icons.chevron_left)),
-          Expanded(
-            child: Text(
-              'Accuracy: White ${r.accuracyWhite}% · Black ${r.accuracyBlack}%',
-              textAlign: TextAlign.center,
-            ),
-          ),
-          IconButton(
-              onPressed: _selected >= r.moves.length - 1 ? null : () => _select(_selected + 1),
-              icon: const Icon(Icons.chevron_right)),
-        ]),
-        Text(
-          'White: ${count(true, Classification.brilliant)} brilliant, ${count(true, Classification.great)} great, '
-          '${count(true, Classification.inaccuracy)} inaccuracies, ${count(true, Classification.mistake)} mistakes, '
-          '${count(true, Classification.miss)} misses, ${count(true, Classification.blunder)} blunders\n'
-          'Black: ${count(false, Classification.brilliant)} brilliant, ${count(false, Classification.great)} great, '
-          '${count(false, Classification.inaccuracy)} inaccuracies, ${count(false, Classification.mistake)} mistakes, '
-          '${count(false, Classification.miss)} misses, ${count(false, Classification.blunder)} blunders',
-          style: t.textTheme.bodySmall,
-        ),
-        const SizedBox(height: 8),
-        Wrap(spacing: 4, runSpacing: 4, children: [
-          for (final (i, mv) in r.moves.indexed)
-            ChoiceChip(
-              label: Row(mainAxisSize: MainAxisSize.min, children: [
-                ReviewBadge(kind: mv.classification.name, size: 14),
-                const SizedBox(width: 4),
-                Text('${mv.white ? '${(mv.ply + 1) ~/ 2}.' : ''}${mv.san}'),
-              ]),
-              selected: _selected == i,
-              onSelected: (_) => _select(i),
-            ),
-        ]),
-        if (keyMoments(r.moves).isNotEmpty) ...[
-          const SizedBox(height: 12),
-          Text('Key moments', style: t.textTheme.titleSmall),
-          const SizedBox(height: 4),
-          for (final km in keyMoments(r.moves))
-            InkWell(
-              onTap: () => _select(km.ply - 1),
+        if (_exploreGame != null) ...[
+          Wrap(spacing: 6, runSpacing: 6, children: [
+            for (final (san, cp) in _exploreMoves) Chip(label: Text('$san  ${_eval(cp)}')),
+            if (_exploreThinking) const Chip(label: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))),
+          ]),
+          const SizedBox(height: 8),
+          FilledButton.tonal(onPressed: _stopExploring, child: const Text('Return to the game')),
+          const SizedBox(height: 8),
+        ],
+        if (_exploreGame == null) ...[
+          if (m != null)
+            Card(
               child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Text('• ${keyMomentSentence(km)}', style: t.textTheme.bodySmall),
+                padding: const EdgeInsets.all(12),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Row(children: [
+                    ReviewBadge(kind: m.classification.name),
+                    const SizedBox(width: 8),
+                    Text('${(m.ply + 1) ~/ 2}${m.white ? '.' : '...'} ${m.san}  ${m.classification.label}',
+                        style: t.textTheme.titleMedium),
+                  ]),
+                  Text('Evaluation ${_eval(m.evalAfter)}'),
+                  if (m.classification.index >= Classification.inaccuracy.index && m.bestSan != null) ...[
+                    Text('Best was ${m.bestSan}'),
+                    const SizedBox(height: 4),
+                    OutlinedButton.icon(
+                      onPressed: _arrowsLoading ? null : () => _showBestMoves(m),
+                      icon: _arrowsLoading
+                          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Icon(Icons.north_east_rounded, size: 16),
+                      label: Text(_bestArrows != null ? 'Showing best moves' : 'Show best moves'),
+                    ),
+                  ],
+                ]),
               ),
             ),
+          Row(children: [
+            IconButton(onPressed: _selected < 0 ? null : () => _select(_selected - 1), icon: const Icon(Icons.chevron_left)),
+            Expanded(
+              child: Text(
+                'Accuracy: White ${r.accuracyWhite}% · Black ${r.accuracyBlack}%',
+                textAlign: TextAlign.center,
+              ),
+            ),
+            IconButton(
+                onPressed: _selected >= r.moves.length - 1 ? null : () => _select(_selected + 1),
+                icon: const Icon(Icons.chevron_right)),
+          ]),
+          Text(
+            'White: ${count(true, Classification.brilliant)} brilliant, ${count(true, Classification.great)} great, '
+            '${count(true, Classification.inaccuracy)} inaccuracies, ${count(true, Classification.mistake)} mistakes, '
+            '${count(true, Classification.miss)} misses, ${count(true, Classification.blunder)} blunders\n'
+            'Black: ${count(false, Classification.brilliant)} brilliant, ${count(false, Classification.great)} great, '
+            '${count(false, Classification.inaccuracy)} inaccuracies, ${count(false, Classification.mistake)} mistakes, '
+            '${count(false, Classification.miss)} misses, ${count(false, Classification.blunder)} blunders',
+            style: t.textTheme.bodySmall,
+          ),
+          const SizedBox(height: 8),
+          Wrap(spacing: 4, runSpacing: 4, children: [
+            for (final (i, mv) in r.moves.indexed)
+              ChoiceChip(
+                label: Row(mainAxisSize: MainAxisSize.min, children: [
+                  ReviewBadge(kind: mv.classification.name, size: 14),
+                  const SizedBox(width: 4),
+                  Text('${mv.white ? '${(mv.ply + 1) ~/ 2}.' : ''}${mv.san}'),
+                ]),
+                selected: _selected == i,
+                onSelected: (_) => _select(i),
+              ),
+          ]),
+          if (keyMoments(r.moves).isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text('Key moments', style: t.textTheme.titleSmall),
+            const SizedBox(height: 4),
+            for (final km in keyMoments(r.moves))
+              InkWell(
+                onTap: () => _select(km.ply - 1),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Text('• ${keyMomentSentence(km)}', style: t.textTheme.bodySmall),
+                ),
+              ),
+          ],
+          const SizedBox(height: 12),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            OutlinedButton.icon(
+              onPressed: () => _startExploring(m),
+              icon: const Icon(Icons.alt_route_rounded),
+              label: const Text('Explore from here'),
+            ),
+            if (_mistakesToRetry(r).isNotEmpty)
+              OutlinedButton.icon(
+                onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => _RetryMistakesScreen(mistakes: _mistakesToRetry(r)),
+                )),
+                icon: const Icon(Icons.replay_rounded),
+                label: const Text('Retry your mistakes'),
+              ),
+            OutlinedButton.icon(
+              onPressed: () => playBotFromPosition(context, fen: m?.fenAfter ?? widget.startFen, playWhite: widget.whiteAtBottom),
+              icon: const Icon(Icons.smart_toy_outlined),
+              label: const Text('Play from here vs a bot'),
+            ),
+          ]),
+          const SizedBox(height: 8),
+          Text('Stockfish 11 at depth ${r.depth}, on your phone.', style: t.textTheme.bodySmall),
         ],
-        const SizedBox(height: 12),
-        OutlinedButton.icon(
-          onPressed: () => playBotFromPosition(context, fen: m?.fenAfter ?? widget.startFen, playWhite: widget.whiteAtBottom),
-          icon: const Icon(Icons.smart_toy_outlined),
-          label: const Text('Play from here vs a bot'),
-        ),
-        const SizedBox(height: 8),
-        Text('Stockfish 11 at depth ${r.depth}, on your phone.', style: t.textTheme.bodySmall),
       ],
     );
   }
+
+  /// The player's own mistakes/misses/blunders -- "find the better move yourself" only
+  /// makes sense for moves they played.
+  List<MoveReview> _mistakesToRetry(ReviewResult r) => r.moves
+      .where((m) =>
+          m.white == widget.whiteAtBottom &&
+          m.bestMove != null &&
+          (m.classification == Classification.mistake ||
+              m.classification == Classification.miss ||
+              m.classification == Classification.blunder))
+      .toList();
 }
 
 /// The whole game's evaluation as a graph across the top; tap (or drag) any point to jump
@@ -368,4 +464,98 @@ class _EvalGraphPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _EvalGraphPainter oldDelegate) =>
       oldDelegate.points != points || oldDelegate.selected != selected;
+}
+
+/// "Retry your mistakes": steps through the moves this player got wrong, each as a one-move
+/// puzzle (find the engine's best move before it's shown), reusing the same session class
+/// the Puzzles tab uses.
+class _RetryMistakesScreen extends StatefulWidget {
+  const _RetryMistakesScreen({required this.mistakes});
+  final List<MoveReview> mistakes;
+
+  @override
+  State<_RetryMistakesScreen> createState() => _RetryMistakesScreenState();
+}
+
+class _RetryMistakesScreenState extends State<_RetryMistakesScreen> {
+  int _idx = 0;
+  late PuzzleSession _session = _sessionFor(0);
+
+  PuzzleSession _sessionFor(int i) {
+    final m = widget.mistakes[i];
+    return PuzzleSession(Puzzle(id: 'retry-${m.ply}', fen: m.fenBefore, solution: [m.bestMove!], themes: const [], rating: 0));
+  }
+
+  bool _onMove(String from, String to, String? promo) {
+    final ok = _session.tryMove(from, to, promo);
+    if (ok) setState(() {});
+    return ok;
+  }
+
+  void _next() {
+    if (_idx >= widget.mistakes.length - 1) {
+      Navigator.of(context).pop();
+      return;
+    }
+    setState(() {
+      _idx++;
+      _session = _sessionFor(_idx);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hc = context.hc;
+    final s = _session;
+    final m = widget.mistakes[_idx];
+    return Scaffold(
+      appBar: AppBar(title: Text('Retry your mistakes (${_idx + 1}/${widget.mistakes.length})')),
+      body: SafeArea(
+        top: false,
+        child: ListView(
+          padding: const EdgeInsets.all(HcSpace.s4),
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(HcRadius.board),
+              child: ChessBoardView(
+                key: ValueKey('${m.ply}-$_idx'),
+                fen: s.fen,
+                whiteAtBottom: m.white,
+                lastMove: s.lastMove,
+                lastMoveSan: s.lastSan,
+                hintSquare: s.hintFrom,
+                arrow: s.hintTo != null ? (s.hintFrom!, s.hintTo!) : null,
+                onMove: s.status == PuzzleStatus.playing ? _onMove : null,
+                animate: !AppSettings.instance.lowData,
+              ),
+            ),
+            const SizedBox(height: HcSpace.s3),
+            Text(
+              switch (s.status) {
+                PuzzleStatus.playing => '${m.white ? 'White' : 'Black'} to play -- find the move you missed.',
+                PuzzleStatus.solved => 'Correct!',
+                PuzzleStatus.failed => 'Not quite. The best move was ${m.bestSan ?? s.puzzle.solution.first}.',
+              },
+              style: HcText.titleMd.copyWith(color: hc.ink),
+            ),
+            const SizedBox(height: HcSpace.s3),
+            if (s.status == PuzzleStatus.playing)
+              TextButton(
+                onPressed: s.hintLevel >= 2 ? null : () => setState(s.showHint),
+                child: Text(s.hintLevel == 0 ? 'Hint' : 'Show move'),
+              )
+            else
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  style: HcButtons.large(),
+                  onPressed: _next,
+                  child: Text(_idx >= widget.mistakes.length - 1 ? 'Done' : 'Next'),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
 }
