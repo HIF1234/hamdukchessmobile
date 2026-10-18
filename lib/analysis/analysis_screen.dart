@@ -9,6 +9,8 @@ import '../core/theme.dart';
 import '../engine/device.dart';
 import '../engine/uci_engine.dart';
 import '../review/game_review.dart' show reviewDepthFor;
+import 'board_editor_screen.dart';
+import 'import_game_screen.dart';
 
 const standardStartFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 
@@ -149,7 +151,18 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
     final hc = context.hc;
     final whiteToMove = _game.turn == ch.Color.WHITE;
     return Scaffold(
-      appBar: AppBar(title: const Text('Analysis board')),
+      appBar: AppBar(title: const Text('Analysis board'), actions: [
+        IconButton(
+          tooltip: 'Board editor',
+          icon: const Icon(Icons.grid_on_rounded),
+          onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const BoardEditorScreen())),
+        ),
+        IconButton(
+          tooltip: 'Import a game',
+          icon: const Icon(Icons.file_upload_outlined),
+          onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ImportGameScreen())),
+        ),
+      ]),
       body: SafeArea(
         top: false,
         child: _engineError != null
