@@ -1,6 +1,7 @@
 import 'package:chess/chess.dart' as ch;
 import 'package:flutter/material.dart';
 
+import '../analysis/analysis_screen.dart';
 import '../board/chess_board.dart';
 import '../bots/bot_picker.dart';
 import '../core/api.dart';
@@ -190,8 +191,15 @@ class _ReviewScreenState extends State<ReviewScreen> {
     final t = Theme.of(context);
     final r = _result;
     final total = widget.sanMoves.length;
+    final currentFen = r == null ? widget.startFen : _positionFen(_selected >= 0 ? r.moves[_selected] : null);
     return Scaffold(
-      appBar: AppBar(title: const Text('Game review')),
+      appBar: AppBar(title: const Text('Game review'), actions: [
+        IconButton(
+          tooltip: 'Open in Analysis board',
+          onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => AnalysisScreen(startFen: currentFen))),
+          icon: const Icon(Icons.explore_outlined),
+        ),
+      ]),
       body: SafeArea(
         child: _error != null
             ? Center(child: Padding(padding: const EdgeInsets.all(24), child: Text(_error!)))

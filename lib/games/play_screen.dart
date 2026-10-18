@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../analysis/analysis_screen.dart';
 import '../core/active_game.dart';
 import '../core/api.dart';
 import '../core/app_config.dart';
@@ -1028,6 +1029,15 @@ class _PlayScreenState extends State<PlayScreen> {
                       ),
                     ),
                   ],
+                ),
+                const SizedBox(height: HcSpace.s3),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AnalysisScreen())),
+                    icon: const Icon(Icons.explore_outlined, size: 20),
+                    label: const Text('Analysis board'),
+                  ),
                 ),
                 const SizedBox(height: HcSpace.s7),
                 const SectionLabel('Naija bots'),

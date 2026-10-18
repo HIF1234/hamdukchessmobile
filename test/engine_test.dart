@@ -27,6 +27,9 @@ void main() {
       final (_, lines) = await engine.analyse('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', depth: 8, movetimeMs: 500);
       expect(lines.length, 3);
       expect(lines[0].score >= lines[1].score && lines[1].score >= lines[2].score, isTrue);
+      // The analysis board shows a few moves of each line, not just the first.
+      expect(lines[0].line, startsWith(lines[0].move));
+      expect(lines[0].line.split(' ').length, greaterThan(1));
     });
 
     test('a bot plays a legal-looking move from a real position', () async {

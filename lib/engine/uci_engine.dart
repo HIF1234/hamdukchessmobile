@@ -5,9 +5,13 @@ import 'dart:io';
 /// One line of Stockfish's analysis: a candidate move and its score in centipawns from the
 /// side to move's point of view (mate scores become ±100000).
 class Pv {
-  const Pv(this.move, this.score);
+  const Pv(this.move, this.score, [this.line = '']);
   final String move;
   final int score;
+
+  /// The full principal variation Stockfish reported, space-separated UCI moves (e.g. for
+  /// the analysis board's "three lines" -- most callers only need [move]).
+  final String line;
 }
 
 /// Stockfish running as a separate program, spoken to only through UCI text commands on
@@ -68,11 +72,12 @@ class UciEngine {
       if (w(line)) _waiters.remove(w);
     }
     if (_search == null) return;
-    final m = RegExp(r'multipv (\d+) score (cp|mate) (-?\d+).* pv (\S+)').firstMatch(line);
+    final m = RegExp(r'multipv (\d+) score (cp|mate) (-?\d+).* pv (.+)$').firstMatch(line);
     if (m != null) {
       final raw = int.parse(m.group(3)!);
       final score = m.group(2) == 'mate' ? raw.sign * 100000 : raw;
-      _pvs[int.parse(m.group(1)!)] = Pv(m.group(4)!, score);
+      final pv = m.group(4)!;
+      _pvs[int.parse(m.group(1)!)] = Pv(pv.split(' ').first, score, pv);
     }
     if (line.startsWith('bestmove')) {
       final best = line.split(' ')[1];
