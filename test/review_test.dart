@@ -25,6 +25,46 @@ void main() {
     expect(accuracy([m(0, -500)]), lessThan(30));
   });
 
+  group('keyMoments', () {
+    MoveReview m({
+      required int ply,
+      required bool white,
+      required Classification c,
+      required int before,
+      required int after,
+    }) =>
+        MoveReview(
+          ply: ply,
+          san: 'move$ply',
+          uci: 'a1a2',
+          white: white,
+          fenBefore: start,
+          fenAfter: start,
+          evalBefore: before,
+          evalAfter: after,
+          bestMove: null,
+          cpLoss: 0,
+          classification: c,
+        );
+
+    test('picks the biggest swings, in chronological order, book excluded', () {
+      final moves = [
+        m(ply: 1, white: true, c: Classification.book, before: 0, after: 900), // excluded: book
+        m(ply: 2, white: false, c: Classification.blunder, before: 50, after: -400), // swing 450
+        m(ply: 3, white: true, c: Classification.good, before: -400, after: -350), // swing 50
+        m(ply: 4, white: false, c: Classification.brilliant, before: -350, after: 300), // swing 650
+        m(ply: 5, white: true, c: Classification.mistake, before: 300, after: 0), // swing 300
+      ];
+      final top = keyMoments(moves, n: 2);
+      expect(top.map((m) => m.ply), [2, 4]); // the two biggest swings, in ply order
+    });
+
+    test('the sentence names the move, the mover and the eval swing', () {
+      final move = m(ply: 6, white: false, c: Classification.blunder, before: 50, after: -520);
+      expect(keyMomentSentence(move), '3. Black played move6 (Blunder), swinging the evaluation from +0.5 to -5.2.');
+    });
+  });
+
   group('upgradeClassifications', () {
     MoveReview m({
       required bool white,

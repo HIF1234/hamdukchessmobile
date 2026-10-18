@@ -262,3 +262,27 @@ double winPct(int cp) {
   final c = cp.clamp(-1000, 1000);
   return 50 + 50 * (2 / (1 + exp(-0.00368208 * c)) - 1);
 }
+
+/// The game's biggest turning points: the moves with the largest eval swing, book moves
+/// excluded (early-game swings there are just engine noise, not a real turning point).
+/// Up to [n], in chronological order.
+List<MoveReview> keyMoments(List<MoveReview> moves, {int n = 3}) {
+  final candidates = moves.where((m) => m.classification != Classification.book).toList()
+    ..sort((a, b) => (b.evalAfter - b.evalBefore).abs().compareTo((a.evalAfter - a.evalBefore).abs()));
+  final top = candidates.take(n).toList()..sort((a, b) => a.ply.compareTo(b.ply));
+  return top;
+}
+
+/// "6. Nf6 (Blunder) swung the evaluation from +0.3 to -5.2."
+String keyMomentSentence(MoveReview m) {
+  final moveNo = (m.ply + 1) ~/ 2;
+  final who = m.white ? 'White' : 'Black';
+  String fmt(int cp) {
+    if (cp.abs() >= 90000) return cp > 0 ? 'mate for White' : 'mate for Black';
+    final p = cp / 100;
+    return '${p >= 0 ? '+' : ''}${p.toStringAsFixed(1)}';
+  }
+
+  return '$moveNo. $who played ${m.san} (${m.classification.label}), swinging the evaluation from '
+      '${fmt(m.evalBefore)} to ${fmt(m.evalAfter)}.';
+}

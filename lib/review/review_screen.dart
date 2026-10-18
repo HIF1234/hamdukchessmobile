@@ -234,6 +234,19 @@ class _ReviewScreenState extends State<ReviewScreen> {
               onSelected: (_) => _select(i),
             ),
         ]),
+        if (keyMoments(r.moves).isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Text('Key moments', style: t.textTheme.titleSmall),
+          const SizedBox(height: 4),
+          for (final km in keyMoments(r.moves))
+            InkWell(
+              onTap: () => _select(km.ply - 1),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Text('• ${keyMomentSentence(km)}', style: t.textTheme.bodySmall),
+              ),
+            ),
+        ],
         const SizedBox(height: 12),
         OutlinedButton.icon(
           onPressed: () => playBotFromPosition(context, fen: m?.fenAfter ?? widget.startFen, playWhite: widget.whiteAtBottom),
