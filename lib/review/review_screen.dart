@@ -7,6 +7,7 @@ import '../core/hc_widgets.dart';
 import '../core/keep_screen_on.dart';
 import '../core/settings.dart';
 import '../core/telemetry.dart';
+import '../core/theme.dart';
 import '../engine/device.dart';
 import '../engine/uci_engine.dart';
 import 'game_review.dart';
@@ -139,6 +140,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
     return ListView(
       padding: const EdgeInsets.all(12),
       children: [
+        _EvalGraph(moves: r.moves, selected: _selected, onSelect: (i) => setState(() => _selected = i)),
+        const SizedBox(height: 8),
         ChessBoardView(
           fen: m?.fenAfter ?? widget.startFen,
           whiteAtBottom: widget.whiteAtBottom,
@@ -209,4 +212,114 @@ class _ReviewScreenState extends State<ReviewScreen> {
       ],
     );
   }
+}
+
+/// The whole game's evaluation as a graph across the top; tap (or drag) any point to jump
+/// there. Points: index 0 is the starting position, index i+1 is moves[i].evalAfter --
+/// [selected] follows review_screen's own -1-for-start convention, [onSelect] expects that
+/// same convention back.
+class _EvalGraph extends StatelessWidget {
+  const _EvalGraph({required this.moves, required this.selected, required this.onSelect});
+  final List<MoveReview> moves;
+  final int selected;
+  final ValueChanged<int> onSelect;
+
+  static const _cap = 600;
+
+  @override
+  Widget build(BuildContext context) {
+    final hc = context.hc;
+    final points = <int>[0, for (final m in moves) m.evalAfter];
+    return SizedBox(
+      height: 64,
+      width: double.infinity,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final size = Size(constraints.maxWidth, constraints.maxHeight);
+          void handleTap(Offset local) {
+            if (points.length < 2) return;
+            final i = (local.dx / size.width * (points.length - 1)).round().clamp(0, points.length - 1);
+            onSelect(i - 1);
+          }
+
+          return GestureDetector(
+            onTapDown: (d) => handleTap(d.localPosition),
+            onHorizontalDragUpdate: (d) => handleTap(d.localPosition),
+            child: CustomPaint(
+              size: size,
+              painter: _EvalGraphPainter(
+                points: points,
+                selected: selected + 1,
+                white: hc.green,
+                black: hc.ink,
+                mid: hc.line,
+                marker: hc.ink2,
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _EvalGraphPainter extends CustomPainter {
+  _EvalGraphPainter({
+    required this.points,
+    required this.selected,
+    required this.white,
+    required this.black,
+    required this.mid,
+    required this.marker,
+  });
+  final List<int> points;
+  final int selected;
+  final Color white;
+  final Color black;
+  final Color mid;
+  final Color marker;
+
+  double _y(int cp, double h) {
+    final clamped = cp.clamp(-_EvalGraph._cap, _EvalGraph._cap);
+    return h / 2 - (clamped / _EvalGraph._cap) * (h / 2 - 2);
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (points.length < 2) return;
+    final n = points.length;
+    final dx = size.width / (n - 1);
+    final midY = size.height / 2;
+
+    canvas.drawLine(Offset(0, midY), Offset(size.width, midY), Paint()
+      ..color = mid.withValues(alpha: 0.4)
+      ..strokeWidth = 1);
+
+    for (var i = 0; i < n - 1; i++) {
+      final x1 = i * dx, x2 = (i + 1) * dx;
+      final y1 = _y(points[i], size.height), y2 = _y(points[i + 1], size.height);
+      final favorsWhite = points[i] + points[i + 1] >= 0;
+      final color = favorsWhite ? white : black;
+      final fill = Path()
+        ..moveTo(x1, midY)
+        ..lineTo(x1, y1)
+        ..lineTo(x2, y2)
+        ..lineTo(x2, midY)
+        ..close();
+      canvas.drawPath(fill, Paint()..color = color.withValues(alpha: 0.22));
+      canvas.drawLine(Offset(x1, y1), Offset(x2, y2), Paint()
+        ..color = color
+        ..strokeWidth = 1.5);
+    }
+    if (selected >= 0 && selected < n) {
+      final x = selected * dx;
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), Paint()
+        ..color = marker
+        ..strokeWidth = 1.5);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _EvalGraphPainter oldDelegate) =>
+      oldDelegate.points != points || oldDelegate.selected != selected;
 }
