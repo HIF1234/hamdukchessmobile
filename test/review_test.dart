@@ -25,6 +25,71 @@ void main() {
     expect(accuracy([m(0, -500)]), lessThan(30));
   });
 
+  group('upgradeClassifications', () {
+    MoveReview m({
+      required bool white,
+      required Classification c,
+      required int before,
+      required int after,
+      String uci = 'a1a2',
+    }) =>
+        MoveReview(
+          ply: 1,
+          san: 'x',
+          uci: uci,
+          white: white,
+          fenBefore: start,
+          fenAfter: start,
+          evalBefore: before,
+          evalAfter: after,
+          bestMove: null,
+          cpLoss: 0,
+          classification: c,
+        );
+
+    test('a mistake from a winning position becomes a miss', () {
+      final moves = [m(white: true, c: Classification.mistake, before: 400, after: 100)];
+      upgradeClassifications(moves);
+      expect(moves[0].classification, Classification.miss);
+    });
+
+    test('a mistake that actually loses the game stays a mistake', () {
+      final moves = [m(white: true, c: Classification.mistake, before: 400, after: -200)];
+      upgradeClassifications(moves);
+      expect(moves[0].classification, Classification.mistake);
+    });
+
+    test('the best move in a tense position becomes great', () {
+      final moves = [m(white: true, c: Classification.best, before: 50, after: 50)];
+      upgradeClassifications(moves);
+      expect(moves[0].classification, Classification.great);
+    });
+
+    test('the best move in an already-won position stays best', () {
+      final moves = [m(white: true, c: Classification.best, before: 500, after: 500)];
+      upgradeClassifications(moves);
+      expect(moves[0].classification, Classification.best);
+    });
+
+    test('a sacrifice the opponent recaptures, staying winning, becomes brilliant', () {
+      final moves = [
+        m(white: true, c: Classification.best, before: 50, after: 50, uci: 'd1d8'),
+        m(white: false, c: Classification.best, before: 50, after: 200, uci: 'g8d8'),
+      ];
+      upgradeClassifications(moves);
+      expect(moves[0].classification, Classification.brilliant);
+    });
+
+    test('a sacrifice that is actually just losing stays as-is', () {
+      final moves = [
+        m(white: true, c: Classification.good, before: 50, after: 50, uci: 'd1d8'),
+        m(white: false, c: Classification.best, before: 50, after: -300, uci: 'g8d8'),
+      ];
+      upgradeClassifications(moves);
+      expect(moves[0].classification, Classification.good);
+    });
+  });
+
   test('phone memory decides review depth', () {
     expect(reviewDepthFor(6000).depth, 14);
     expect(reviewDepthFor(3500).depth, 12);

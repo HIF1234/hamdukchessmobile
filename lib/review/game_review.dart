@@ -4,21 +4,29 @@ import 'package:chess/chess.dart' as ch;
 
 import '../engine/uci_engine.dart';
 
-/// Move quality, with the same thresholds as the website (src/lib/game-review.ts).
-enum Classification { book, best, good, inaccuracy, mistake, blunder }
+/// Move quality, with the same thresholds as the website (src/lib/game-review.ts). Order
+/// matters: review_screen.dart's "Best was X" check compares index against inaccuracy, so
+/// best/good/great/brilliant must stay below it and mistake/miss/blunder above it.
+enum Classification { book, best, good, great, brilliant, inaccuracy, mistake, miss, blunder }
 
 extension ClassificationLabel on Classification {
   String get label => switch (this) {
         Classification.book => 'Book',
         Classification.best => 'Best',
         Classification.good => 'Good',
+        Classification.great => 'Great',
+        Classification.brilliant => 'Brilliant',
         Classification.inaccuracy => 'Inaccuracy',
         Classification.mistake => 'Mistake',
+        Classification.miss => 'Miss',
         Classification.blunder => 'Blunder',
       };
   String get symbol => switch (this) {
+        Classification.great => '!',
+        Classification.brilliant => '!!',
         Classification.inaccuracy => '?!',
         Classification.mistake => '?',
+        Classification.miss => '?!',
         Classification.blunder => '??',
         _ => '',
       };
@@ -166,6 +174,7 @@ ReviewResult buildReview(
       classification: isBook ? Classification.book : classify(cpLoss, p.$4 == evals[i].$2),
     ));
   }
+  upgradeClassifications(moves);
   return ReviewResult(
     depth: depth,
     moves: moves,
@@ -180,6 +189,57 @@ Classification classify(int cpLoss, bool isTop) {
   if (cpLoss < 90) return Classification.inaccuracy;
   if (cpLoss < 200) return Classification.mistake;
   return Classification.blunder;
+}
+
+/// Upgrades some best/mistake/blunder calls to great, brilliant or miss, from data the
+/// review already computed (no extra engine calls). Same heuristics as the website's
+/// upgradeClassifications (src/lib/game-review.ts) -- original, since chess.com popularized
+/// these labels but publishes no formula for them:
+/// - Miss: the mover already had a big, close-to-decisive advantage (>= 300cp) and their
+///   move wasn't the cleanest way to press it, though the game isn't actually blown.
+/// - Great: found the engine's top move in a tense, roughly balanced position (|eval| <= 100).
+/// - Brilliant: found the top move, it looks like giving up material (the opponent recaptures
+///   on the very same square next move), yet the mover is still clearly better off afterward.
+void upgradeClassifications(List<MoveReview> moves) {
+  for (var i = 0; i < moves.length; i++) {
+    final m = moves[i];
+    final sign = m.white ? 1 : -1;
+    final moverBefore = m.evalBefore * sign;
+    final moverAfter = m.evalAfter * sign;
+    MoveReview replace(Classification c) => moves[i] = MoveReview(
+          ply: m.ply,
+          san: m.san,
+          uci: m.uci,
+          white: m.white,
+          fenBefore: m.fenBefore,
+          fenAfter: m.fenAfter,
+          evalBefore: m.evalBefore,
+          evalAfter: m.evalAfter,
+          bestMove: m.bestMove,
+          cpLoss: m.cpLoss,
+          classification: c,
+        );
+    if ((m.classification == Classification.mistake || m.classification == Classification.blunder) &&
+        moverBefore >= 300 &&
+        moverAfter > -50) {
+      moves[i] = replace(Classification.miss);
+      continue;
+    }
+    var cls = m.classification;
+    if (cls == Classification.best && moverBefore.abs() <= 100) {
+      cls = Classification.great;
+      moves[i] = replace(cls);
+    }
+    if (i + 1 < moves.length) {
+      final next = moves[i + 1];
+      final sacrificed = next.uci.substring(2, 4) == m.uci.substring(2, 4);
+      if (sacrificed &&
+          (cls == Classification.best || cls == Classification.great) &&
+          next.evalAfter * sign >= 150) {
+        moves[i] = replace(Classification.brilliant);
+      }
+    }
+  }
 }
 
 /// Lichess-style accuracy from the drop in winning chances, 0-100 (same formula as the site).

@@ -996,8 +996,11 @@ class ReviewBadge extends StatelessWidget {
       'book' => (HcColors.reviewBook, HcColors.onReview, null, Icons.menu_book_rounded),
       'best' => (HcColors.reviewBest, HcColors.onReview, null, Icons.star_rounded),
       'good' => (HcColors.reviewGood, HcColors.onReview, null, Icons.check_rounded),
+      'great' => (HcColors.reviewGreat, HcColors.onReview, '!', null),
+      'brilliant' => (HcColors.reviewBrilliant, HcColors.onReview, '!!', null),
       'inaccuracy' => (HcColors.reviewInaccuracy, HcColors.onReviewDark, '?!', null),
       'mistake' => (HcColors.reviewMistake, HcColors.onReviewDark, '?', null),
+      'miss' => (HcColors.reviewMiss, HcColors.onReview, '?!', null),
       _ => (HcColors.reviewBlunder, HcColors.onReview, '??', null),
     };
     return Container(

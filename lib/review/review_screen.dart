@@ -177,10 +177,12 @@ class _ReviewScreenState extends State<ReviewScreen> {
               icon: const Icon(Icons.chevron_right)),
         ]),
         Text(
-          'White: ${count(true, Classification.inaccuracy)} inaccuracies, ${count(true, Classification.mistake)} mistakes, '
-          '${count(true, Classification.blunder)} blunders\n'
-          'Black: ${count(false, Classification.inaccuracy)} inaccuracies, ${count(false, Classification.mistake)} mistakes, '
-          '${count(false, Classification.blunder)} blunders',
+          'White: ${count(true, Classification.brilliant)} brilliant, ${count(true, Classification.great)} great, '
+          '${count(true, Classification.inaccuracy)} inaccuracies, ${count(true, Classification.mistake)} mistakes, '
+          '${count(true, Classification.miss)} misses, ${count(true, Classification.blunder)} blunders\n'
+          'Black: ${count(false, Classification.brilliant)} brilliant, ${count(false, Classification.great)} great, '
+          '${count(false, Classification.inaccuracy)} inaccuracies, ${count(false, Classification.mistake)} mistakes, '
+          '${count(false, Classification.miss)} misses, ${count(false, Classification.blunder)} blunders',
           style: t.textTheme.bodySmall,
         ),
         const SizedBox(height: 8),

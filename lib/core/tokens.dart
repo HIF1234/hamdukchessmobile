@@ -184,6 +184,12 @@ abstract final class HcColors {
   static const reviewBest = Color(0xFF1F8048);
   /// Good move badge fill; glyph on-review.
   static const reviewGood = Color(0xFF2F7FA6);
+  /// Great move (!) badge fill; glyph on-review.
+  static const reviewGreat = Color(0xFF1C9099);
+  /// Brilliant move (!!) badge fill; glyph on-review.
+  static const reviewBrilliant = Color(0xFF6D4FC4);
+  /// Miss (?!) badge fill; glyph on-review.
+  static const reviewMiss = Color(0xFFF0944D);
   /// Inaccuracy (?!) badge fill; glyph on-review-dark.
   static const reviewInaccuracy = Color(0xFFE8A317);
   /// Mistake (?) badge fill; glyph on-review-dark.
