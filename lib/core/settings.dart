@@ -42,6 +42,14 @@ class AppSettings extends ChangeNotifier {
   /// wins with it on don't count toward the bot ladder.
   bool assistedMode = true;
 
+  /// 'auto' (phone memory decides, see reviewDepthFor), 'fast' (shallower, quicker) or
+  /// 'deep' (the phone's top tier regardless of memory). Review and analysis.
+  String engineDepth = 'auto';
+
+  /// Off by default: halves movetime and caps depth at 8 regardless of [engineDepth], for
+  /// long review/analysis sessions on battery.
+  bool engineBatterySaver = false;
+
   Future<void> load() async {
     final j = await (await JsonStore.open()).read(_key);
     if (j is Map) {
@@ -54,6 +62,8 @@ class AppSettings extends ChangeNotifier {
       blindfold = j['blindfold'] == true;
       sound = j['sound'] != false;
       assistedMode = j['assistedMode'] != false;
+      engineDepth = j['engineDepth'] as String? ?? 'auto';
+      engineBatterySaver = j['engineBatterySaver'] == true;
     }
   }
 
@@ -111,6 +121,18 @@ class AppSettings extends ChangeNotifier {
     await _save();
   }
 
+  Future<void> setEngineDepth(String v) async {
+    engineDepth = v;
+    notifyListeners();
+    await _save();
+  }
+
+  Future<void> setEngineBatterySaver(bool v) async {
+    engineBatterySaver = v;
+    notifyListeners();
+    await _save();
+  }
+
   Future<void> _save() => (JsonStore.open()).then((s) => s.write(_key, {
         'lowData': lowData,
         'language': language,
@@ -121,6 +143,8 @@ class AppSettings extends ChangeNotifier {
         'blindfold': blindfold,
         'sound': sound,
         'assistedMode': assistedMode,
+        'engineDepth': engineDepth,
+        'engineBatterySaver': engineBatterySaver,
       }));
 }
 

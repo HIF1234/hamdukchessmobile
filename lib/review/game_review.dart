@@ -81,10 +81,19 @@ class ReviewResult {
 }
 
 /// Depth for this phone (spec §3: stay light on 2 GB phones). The website uses 14 for Plus.
-({int depth, int movetimeMs, bool light}) reviewDepthFor(int ramMb) {
-  if (ramMb >= 4000) return (depth: 14, movetimeMs: 1500, light: false);
-  if (ramMb >= 3000) return (depth: 12, movetimeMs: 1000, light: false);
-  return (depth: 10, movetimeMs: 700, light: true);
+/// [engineDepth] (AppSettings) overrides the phone-memory guess: 'fast' always picks the
+/// lightest tier, 'deep' always picks the richest; 'auto' (the default) keeps the memory
+/// check. [batterySaver] then caps whatever that chose, win or lose.
+({int depth, int movetimeMs, bool light}) reviewDepthFor(int ramMb, {String engineDepth = 'auto', bool batterySaver = false}) {
+  final tier = switch (engineDepth) {
+    'fast' => (depth: 10, movetimeMs: 700, light: true),
+    'deep' => (depth: 14, movetimeMs: 1500, light: false),
+    _ when ramMb >= 4000 => (depth: 14, movetimeMs: 1500, light: false),
+    _ when ramMb >= 3000 => (depth: 12, movetimeMs: 1000, light: false),
+    _ => (depth: 10, movetimeMs: 700, light: true),
+  };
+  if (!batterySaver) return tier;
+  return (depth: min(tier.depth, 8), movetimeMs: tier.movetimeMs ~/ 2, light: true);
 }
 
 class _Pos {

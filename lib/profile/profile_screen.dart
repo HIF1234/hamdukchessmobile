@@ -224,6 +224,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     trailing: Switch(value: AppSettings.instance.blindfold, onChanged: AppSettings.instance.setBlindfold),
                   ),
                 ),
+                ListenableBuilder(
+                  listenable: AppSettings.instance,
+                  builder: (context, _) => HcListRow(
+                    title: 'Engine depth',
+                    subtitle: switch (AppSettings.instance.engineDepth) {
+                      'fast' => 'Fast: quicker, shallower review and analysis',
+                      'deep' => 'Deep: slower, stronger review and analysis',
+                      _ => 'Auto: based on this phone\'s memory',
+                    },
+                    onTap: () => _editEngineDepth(context),
+                  ),
+                ),
+                ListenableBuilder(
+                  listenable: AppSettings.instance,
+                  builder: (context, _) => HcListRow(
+                    title: 'Engine battery saver',
+                    subtitle: 'Shorter, shallower searches in review and analysis',
+                    trailing: Switch(
+                      value: AppSettings.instance.engineBatterySaver,
+                      onChanged: AppSettings.instance.setEngineBatterySaver,
+                    ),
+                  ),
+                ),
                 if (Supabase.instance.client.auth.currentUser?.isAnonymous == false) ...[
                   HcListRow(
                     title: 'Location',
@@ -309,6 +332,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
         // Best-effort; the device-local preference above is what actually matters today.
       }
     }
+  }
+
+  Future<void> _editEngineDepth(BuildContext context) async {
+    const options = {'auto': 'Auto (phone memory decides)', 'fast': 'Fast', 'deep': 'Deep'};
+    final current = AppSettings.instance.engineDepth;
+    final chosen = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            for (final entry in options.entries)
+              ListTile(
+                title: Text(entry.value),
+                trailing: entry.key == current ? const Icon(Icons.check_rounded) : null,
+                onTap: () => Navigator.pop(ctx, entry.key),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (chosen == null || chosen == current) return;
+    await AppSettings.instance.setEngineDepth(chosen);
   }
 
   /// Someone nearby scans this (QrScanScreen) to open your profile and add you as a friend.

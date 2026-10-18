@@ -105,7 +105,11 @@ class _ReviewScreenState extends State<ReviewScreen> {
 
   Future<void> _run() async {
     try {
-      final tier = reviewDepthFor(await Device.totalRamMb());
+      final tier = reviewDepthFor(
+        await Device.totalRamMb(),
+        engineDepth: AppSettings.instance.engineDepth,
+        batterySaver: AppSettings.instance.engineBatterySaver,
+      );
       setState(() => _light = tier.light);
       _engine = await UciEngine.start(await Device.stockfishPath());
       final r = await reviewGame(

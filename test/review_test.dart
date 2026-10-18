@@ -136,6 +136,19 @@ void main() {
     expect(reviewDepthFor(2000), (depth: 10, movetimeMs: 700, light: true));
   });
 
+  test('engine settings override the phone-memory guess', () {
+    expect(reviewDepthFor(6000, engineDepth: 'fast').depth, 10); // a beefy phone, forced light
+    expect(reviewDepthFor(2000, engineDepth: 'deep').depth, 14); // a weak phone, forced deep
+    expect(reviewDepthFor(6000, engineDepth: 'auto').depth, 14); // unchanged default behaviour
+  });
+
+  test('battery saver caps whatever tier was chosen', () {
+    final saved = reviewDepthFor(6000, engineDepth: 'deep', batterySaver: true);
+    expect(saved.depth, 8);
+    expect(saved.movetimeMs, 750); // half of deep's 1500
+    expect(saved.light, isTrue);
+  });
+
   test("reviews Scholar's Mate: Black's Nf6 is a blunder, White's Qxf7 is best", () async {
     final engine = await UciEngine.start('engine/host/stockfish');
     try {
