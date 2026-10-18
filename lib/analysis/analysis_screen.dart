@@ -3,14 +3,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../board/chess_board.dart';
+import '../core/api.dart';
 import '../core/keep_screen_on.dart';
 import '../core/settings.dart';
 import '../core/theme.dart';
 import '../engine/device.dart';
 import '../engine/uci_engine.dart';
 import '../review/game_review.dart' show reviewDepthFor;
+import 'ai_coach.dart';
 import 'board_editor_screen.dart';
+import 'explorer_screen.dart';
 import 'import_game_screen.dart';
+import 'saved_analyses_screen.dart';
+import 'tablebase_screen.dart';
 
 const standardStartFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 
@@ -18,8 +23,10 @@ const standardStartFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0
 /// any game or position (e.g. review's "Open in Analysis"); [startFen] defaults to the
 /// standard starting position.
 class AnalysisScreen extends StatefulWidget {
-  const AnalysisScreen({super.key, this.startFen = standardStartFen});
+  const AnalysisScreen({super.key, this.startFen = standardStartFen, this.initialSanMoves});
   final String startFen;
+  /// Replayed on top of [startFen] at open -- a saved analysis's recorded moves.
+  final List<String>? initialSanMoves;
 
   @override
   State<AnalysisScreen> createState() => _AnalysisScreenState();
@@ -41,6 +48,10 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
   void initState() {
     super.initState();
     KeepScreenOn.push();
+    for (final san in widget.initialSanMoves ?? const []) {
+      if (!_game.move(san)) break;
+      _sanHistory.add(_game.getHistory().cast<String>().last);
+    }
     _startEngine();
   }
 
@@ -199,6 +210,35 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
                     ),
                   ]),
                   const SizedBox(height: HcSpace.s3),
+                  Wrap(spacing: 8, runSpacing: 8, children: [
+                    OutlinedButton.icon(
+                      onPressed: () => askAiCoach(context, _game.fen),
+                      icon: const Icon(Icons.psychology_outlined, size: 16),
+                      label: const Text('Ask the coach'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ExplorerScreen(fen: _game.fen))),
+                      icon: const Icon(Icons.travel_explore_rounded, size: 16),
+                      label: const Text('Opening explorer'),
+                    ),
+                    if (_pieceCount(_game.fen) <= 7)
+                      OutlinedButton.icon(
+                        onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => TablebaseScreen(fen: _game.fen))),
+                        icon: const Icon(Icons.table_chart_outlined, size: 16),
+                        label: const Text('Tablebase'),
+                      ),
+                    OutlinedButton.icon(
+                      onPressed: () => _saveAnalysis(context),
+                      icon: const Icon(Icons.bookmark_border_rounded, size: 16),
+                      label: const Text('Save'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SavedAnalysesScreen())),
+                      icon: const Icon(Icons.folder_open_outlined, size: 16),
+                      label: const Text('Saved'),
+                    ),
+                  ]),
+                  const SizedBox(height: HcSpace.s3),
                   if (_engineOn) ...[
                     Text(
                       _depthReached == 0 ? 'Thinking…' : 'Depth $_depthReached · ${whiteToMove ? 'White' : 'Black'} to move',
@@ -226,5 +266,35 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
   void _copyFen(BuildContext context) {
     Clipboard.setData(ClipboardData(text: _game.fen));
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('FEN copied.')));
+  }
+
+  int _pieceCount(String fen) => fen.split(' ').first.replaceAll(RegExp('[^a-zA-Z]'), '').length;
+
+  Future<void> _saveAnalysis(BuildContext context) async {
+    final controller = TextEditingController(text: _sanHistory.isEmpty ? 'Position' : _sanHistory.join(' '));
+    final title = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Save this analysis'),
+        content: TextField(controller: controller, autofocus: true, decoration: const InputDecoration(labelText: 'Title')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, controller.text.trim()), child: const Text('Save')),
+        ],
+      ),
+    );
+    if (title == null || title.isEmpty || !context.mounted) return;
+    try {
+      await Api.instance.post('/analyses', {
+        'title': title,
+        'startFen': widget.startFen,
+        'moves': _sanHistory,
+        'ply': _sanHistory.length,
+        'orientation': _flipped ? 'black' : 'white',
+      });
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Saved.')));
+    } on ApiError catch (e) {
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    }
   }
 }

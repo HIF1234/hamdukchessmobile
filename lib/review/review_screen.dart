@@ -1,6 +1,7 @@
 import 'package:chess/chess.dart' as ch;
 import 'package:flutter/material.dart';
 
+import '../analysis/ai_coach.dart';
 import '../analysis/analysis_screen.dart';
 import '../board/chess_board.dart';
 import '../bots/bot_picker.dart';
@@ -172,6 +173,90 @@ class _ReviewScreenState extends State<ReviewScreen> {
     }
   }
 
+  /// "Record or type what you were thinking on a move; the coach checks your reasoning
+  /// against the engine." Typed only -- no voice recording built yet.
+  Future<void> _thinkAloud(MoveReview m) async {
+    final thoughtController = TextEditingController();
+    String? markdown;
+    String? error;
+    var loading = false;
+    var submitted = false;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) {
+          Future<void> submit() async {
+            final thought = thoughtController.text.trim();
+            if (thought.length < 3) return;
+            setSheetState(() {
+              loading = true;
+              submitted = true;
+            });
+            try {
+              final r = await Api.instance.post('/coach/think-aloud', {
+                'ply': m.ply,
+                'fenBefore': m.fenBefore,
+                'moveSan': m.san,
+                'classification': m.classification.name,
+                'cpLoss': m.cpLoss,
+                'evalBefore': m.white ? m.evalBefore : -m.evalBefore,
+                'evalAfter': m.white ? m.evalAfter : -m.evalAfter,
+                'bestMoveSan': m.bestSan,
+                'thought': thought,
+                'language': AppSettings.instance.language == 'pcm' ? 'pcm' : 'en',
+              }) as Map;
+              markdown = r['markdown'] as String?;
+              error = r['error'] as String?;
+            } on ApiError catch (e) {
+              error = e.message;
+            } finally {
+              setSheetState(() => loading = false);
+            }
+          }
+
+          final hc = ctx.hc;
+          return SafeArea(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.85),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(HcSpace.s4),
+                child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('What were you thinking on ${m.san}?', style: HcText.titleMd.copyWith(color: hc.ink)),
+                  const SizedBox(height: HcSpace.s3),
+                  if (!submitted) ...[
+                    TextField(
+                      controller: thoughtController,
+                      maxLines: 4,
+                      autofocus: true,
+                      decoration: const InputDecoration(border: OutlineInputBorder(), hintText: 'I thought this move won a pawn...'),
+                    ),
+                    const SizedBox(height: HcSpace.s3),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(style: HcButtons.large(), onPressed: submit, child: const Text('Ask the coach')),
+                    ),
+                  ] else if (loading)
+                    const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()))
+                  else if (error != null)
+                    Text(error!, style: HcText.bodySm.copyWith(color: hc.dangerInk))
+                  else
+                    Text(markdown ?? '', style: HcText.body.copyWith(color: hc.ink)),
+                  const SizedBox(height: HcSpace.s3),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Close')),
+                  ),
+                ]),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   @override
   void dispose() {
     KeepScreenOn.pop();
@@ -278,6 +363,19 @@ class _ReviewScreenState extends State<ReviewScreen> {
                       label: Text(_bestArrows != null ? 'Showing best moves' : 'Show best moves'),
                     ),
                   ],
+                  const SizedBox(height: 8),
+                  Wrap(spacing: 8, runSpacing: 8, children: [
+                    OutlinedButton.icon(
+                      onPressed: () => askAiCoach(context, m.fenBefore),
+                      icon: const Icon(Icons.psychology_outlined, size: 16),
+                      label: const Text('Ask the coach'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () => _thinkAloud(m),
+                      icon: const Icon(Icons.mic_none_rounded, size: 16),
+                      label: const Text('Think aloud'),
+                    ),
+                  ]),
                 ]),
               ),
             ),
