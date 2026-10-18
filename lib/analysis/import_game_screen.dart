@@ -1,4 +1,5 @@
 import 'package:chess/chess.dart' as ch;
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../core/hc_widgets.dart';
@@ -13,10 +14,12 @@ bool looksLikeFen(String text) {
   return fields.isNotEmpty && fields.first.split('/').length == 8;
 }
 
-/// "Paste PGN or FEN." Detects which, then opens the right screen: a FEN goes to the
-/// Analysis board (a position, no move history); a PGN goes to Game review (a full game).
-/// Opening a shared/saved .pgn file isn't built yet -- there's no file-picker or share-
-/// intent wiring on this platform today, only the paste box.
+/// "Paste PGN or FEN, or open a .pgn file saved on the phone." Detects FEN vs PGN, then
+/// opens the right screen: a FEN goes to the Analysis board (a position, no move
+/// history); a PGN goes to Game review (a full game). Receiving a file shared directly
+/// from another app (e.g. WhatsApp's share sheet) isn't built -- that needs share-intent
+/// platform wiring (AndroidManifest intent filters, iOS equivalents), not just a picker;
+/// this only covers a .pgn already saved on the phone, chosen through the system picker.
 class ImportGameScreen extends StatefulWidget {
   const ImportGameScreen({super.key});
 
@@ -34,8 +37,9 @@ class _ImportGameScreenState extends State<ImportGameScreen> {
     super.dispose();
   }
 
-  void _import() {
-    final text = _controller.text.trim();
+  void _import() => _importText(_controller.text.trim());
+
+  void _importText(String text) {
     if (text.isEmpty) return;
     setState(() => _error = null);
 
@@ -63,6 +67,20 @@ class _ImportGameScreenState extends State<ImportGameScreen> {
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => ReviewScreen(startFen: standardStartFen, sanMoves: sanMoves, whiteAtBottom: true),
     ));
+  }
+
+  Future<void> _pickFile() async {
+    setState(() => _error = null);
+    try {
+      final file = await FilePicker.pickFile(type: FileType.custom, allowedExtensions: ['pgn']);
+      if (file == null) return; // user cancelled
+      final text = await file.xFile.readAsString();
+      if (!mounted) return;
+      _controller.text = text;
+      _importText(text.trim());
+    } catch (_) {
+      if (mounted) setState(() => _error = "Couldn't read that file.");
+    }
   }
 
   @override
@@ -93,6 +111,15 @@ class _ImportGameScreenState extends State<ImportGameScreen> {
             SizedBox(
               width: double.infinity,
               child: FilledButton(style: HcButtons.large(), onPressed: _import, child: const Text('Import')),
+            ),
+            const SizedBox(height: HcSpace.s2),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _pickFile,
+                icon: const Icon(Icons.folder_open_outlined),
+                label: const Text('Open a .pgn file from this phone'),
+              ),
             ),
           ]),
         ),
