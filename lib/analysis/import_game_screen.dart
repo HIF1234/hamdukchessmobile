@@ -14,22 +14,33 @@ bool looksLikeFen(String text) {
   return fields.isNotEmpty && fields.first.split('/').length == 8;
 }
 
-/// "Paste PGN or FEN, or open a .pgn file saved on the phone." Detects FEN vs PGN, then
-/// opens the right screen: a FEN goes to the Analysis board (a position, no move
-/// history); a PGN goes to Game review (a full game). Receiving a file shared directly
-/// from another app (e.g. WhatsApp's share sheet) isn't built -- that needs share-intent
-/// platform wiring (AndroidManifest intent filters, iOS equivalents), not just a picker;
-/// this only covers a .pgn already saved on the phone, chosen through the system picker.
+/// "Paste PGN or FEN, open a .pgn file saved on the phone, or receive one shared from
+/// another app (e.g. WhatsApp's share sheet -- Android only; iOS needs a real Share
+/// Extension Xcode target, not built)." Detects FEN vs PGN, then opens the right screen:
+/// a FEN goes to the Analysis board (a position, no move history); a PGN goes to Game
+/// review (a full game).
 class ImportGameScreen extends StatefulWidget {
-  const ImportGameScreen({super.key});
+  const ImportGameScreen({super.key, this.initialText});
+
+  /// Pre-filled and imported immediately -- from a shared file (see ShareIntentListener).
+  final String? initialText;
 
   @override
   State<ImportGameScreen> createState() => _ImportGameScreenState();
 }
 
 class _ImportGameScreenState extends State<ImportGameScreen> {
-  final _controller = TextEditingController();
+  late final _controller = TextEditingController(text: widget.initialText);
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    final text = widget.initialText;
+    if (text != null && text.trim().isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _importText(text.trim()));
+    }
+  }
 
   @override
   void dispose() {

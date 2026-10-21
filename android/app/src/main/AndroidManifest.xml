@@ -43,6 +43,22 @@
                      picks it up automatically (SupabaseAuth's built-in deep-link handling). -->
                 <data android:scheme="https" android:host="play.chess.hamduk.com.ng" android:pathPrefix="/auth/callback" />
             </intent-filter>
+            <!-- "Import a game": a .pgn shared from WhatsApp etc. lands here. No storage
+                 permission needed -- the sending app grants read access to this one content://
+                 URI as part of the share Intent itself; broad storage access isn't required.
+                 .pgn has no registered MIME type, so apps send it as whichever generic type
+                 they guess (observed: text/plain or application/octet-stream); both are
+                 covered without opting into every file type share sheets offer. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/octet-stream" />
+            </intent-filter>
         </activity>
         <!-- Home-screen widget: today's daily puzzle and streak (lib/core/home_widget_sync.dart
              pushes the data; see HamdukWidgetProvider.kt). -->

@@ -7,6 +7,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 
+import 'analysis/import_game_screen.dart';
 import 'auth/passkey_auth.dart';
 import 'bots/bot_game_screen.dart';
 import 'core/active_game.dart';
@@ -18,6 +19,7 @@ import 'core/hc_widgets.dart';
 import 'core/links.dart';
 import 'core/push.dart';
 import 'core/settings.dart';
+import 'core/share_intent.dart';
 import 'core/storage.dart';
 import 'core/theme.dart';
 import 'core/whats_new.dart';
@@ -47,6 +49,7 @@ class _HomeShellState extends State<HomeShell> {
   StreamSubscription<String>? _links;
   StreamSubscription<String>? _gameLinks;
   StreamSubscription<void>? _dailyPuzzleLinks;
+  StreamSubscription<String>? _sharedGames;
   bool _offlineBannerDismissed = false;
   bool _updateBannerDismissed = false;
 
@@ -74,6 +77,10 @@ class _HomeShellState extends State<HomeShell> {
     if (IncomingLinks.instance.takePendingDailyPuzzle()) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _openDailyPuzzle());
     }
+    // A .pgn/FEN shared from another app (e.g. WhatsApp's share sheet) opens Import a game.
+    _sharedGames = ShareIntentListener.instance.games.listen(_openSharedGame);
+    final pendingShare = ShareIntentListener.instance.takePending();
+    if (pendingShare != null) WidgetsBinding.instance.addPostFrameCallback((_) => _openSharedGame(pendingShare));
     _maybeStartPush();
     WidgetsBinding.instance.addPostFrameCallback((_) => _maybePromptPasskey());
     WidgetsBinding.instance.addPostFrameCallback((_) => _maybeResumeGame());
@@ -286,6 +293,11 @@ class _HomeShellState extends State<HomeShell> {
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => ChallengeAcceptScreen(challengeId: id)));
   }
 
+  void _openSharedGame(String text) {
+    if (!mounted) return;
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => ImportGameScreen(initialText: text)));
+  }
+
   void _openDailyPuzzle() {
     if (!mounted) return;
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DailyPuzzleScreen()));
@@ -296,6 +308,7 @@ class _HomeShellState extends State<HomeShell> {
     _links?.cancel();
     _gameLinks?.cancel();
     _dailyPuzzleLinks?.cancel();
+    _sharedGames?.cancel();
     _connectivity?.cancel();
     _presenceTimer?.cancel();
     _badgeTimer?.cancel();

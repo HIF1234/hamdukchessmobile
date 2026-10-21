@@ -20,6 +20,7 @@ import 'core/first_move.dart';
 import 'core/force_update_screen.dart';
 import 'core/links.dart';
 import 'core/settings.dart';
+import 'core/share_intent.dart';
 import 'core/telemetry.dart';
 import 'core/theme.dart';
 import 'firebase_options.dart';
@@ -52,6 +53,7 @@ Future<void> main() async {
     if (auth.currentSession != null) unawaited(BotResults.sync());
   }
   unawaited(IncomingLinks.instance.start());
+  unawaited(ShareIntentListener.instance.start());
   unawaited(AppShortcuts.start());
   AppLifecycleListener(onPause: () => Telemetry.sessionData(bytes: DataMeter.bytes, since: DataMeter.started));
   // Phones stay upright so the board never becomes bigger than the screen; tablets (>=600dp
