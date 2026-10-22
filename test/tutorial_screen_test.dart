@@ -1,7 +1,12 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hamduk_chess/board/chess_board.dart';
+import 'package:hamduk_chess/core/api.dart';
 import 'package:hamduk_chess/learn/tutorial_screen.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 
 const _startFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 
@@ -34,6 +39,8 @@ Future<void> tapSquare(WidgetTester t, String sq) async {
 }
 
 void main() {
+  tearDown(() => Api.client = http.Client());
+
   Future<void> open(WidgetTester t) async {
     // The board (full-width AspectRatio) nearly fills the default 600px test viewport, which
     // pushes the title/body/buttons below it outside ListView's build+cache extent -- they
@@ -43,7 +50,10 @@ void main() {
     t.view.devicePixelRatio = 1.0;
     addTearDown(t.view.resetPhysicalSize);
     addTearDown(t.view.resetDevicePixelRatio);
+    // Progress sync (GET/POST /tutorials/progress) is best-effort and not under test here.
+    Api.client = MockClient((request) async => http.Response('[]', 200));
     await t.pumpWidget(MaterialApp(home: TutorialScreen(tutorial: _tutorial)));
+    await t.pumpAndSettle();
   }
 
   testWidgets('an observe step shows Next without requiring a move', (t) async {
@@ -96,6 +106,7 @@ void main() {
     t.view.devicePixelRatio = 1.0;
     addTearDown(t.view.resetPhysicalSize);
     addTearDown(t.view.resetDevicePixelRatio);
+    Api.client = MockClient((request) async => http.Response('[]', 200));
     await t.pumpWidget(MaterialApp(
       home: Builder(
         builder: (context) => Scaffold(
@@ -118,5 +129,55 @@ void main() {
     await t.pumpAndSettle();
     expect(find.text('Test Tutorial'), findsNothing); // back on the "open" screen
     expect(find.text('open'), findsOneWidget);
+  });
+
+  testWidgets('resumes at the saved step unless it was already completed', (t) async {
+    t.view.physicalSize = const Size(800, 2400);
+    t.view.devicePixelRatio = 1.0;
+    addTearDown(t.view.resetPhysicalSize);
+    addTearDown(t.view.resetDevicePixelRatio);
+    Api.client = MockClient((request) async {
+      if (request.method == 'GET') {
+        return http.Response(jsonEncode([{'tutorial_id': 't1', 'step_index': 1, 'completed': false}]), 200);
+      }
+      return http.Response('{}', 200);
+    });
+    await t.pumpWidget(MaterialApp(home: TutorialScreen(tutorial: _tutorial)));
+    await t.pumpAndSettle();
+    expect(find.text('Step 2'), findsOneWidget);
+    expect(find.text('Step 1'), findsNothing);
+  });
+
+  testWidgets('a completed tutorial starts over from step 1', (t) async {
+    t.view.physicalSize = const Size(800, 2400);
+    t.view.devicePixelRatio = 1.0;
+    addTearDown(t.view.resetPhysicalSize);
+    addTearDown(t.view.resetDevicePixelRatio);
+    Api.client = MockClient((request) async {
+      if (request.method == 'GET') {
+        return http.Response(jsonEncode([{'tutorial_id': 't1', 'step_index': 1, 'completed': true}]), 200);
+      }
+      return http.Response('{}', 200);
+    });
+    await t.pumpWidget(MaterialApp(home: TutorialScreen(tutorial: _tutorial)));
+    await t.pumpAndSettle();
+    expect(find.text('Step 1'), findsOneWidget);
+  });
+
+  testWidgets('finishing posts completed progress for the website to see', (t) async {
+    await open(t);
+    final posted = <Map<String, dynamic>>[];
+    Api.client = MockClient((request) async {
+      if (request.method == 'GET') return http.Response('[]', 200);
+      posted.add(jsonDecode(request.body) as Map<String, dynamic>);
+      return http.Response('{}', 200);
+    });
+    await t.tap(find.widgetWithText(FilledButton, 'Next'));
+    await t.pump();
+    await tapSquare(t, 'e2');
+    await tapSquare(t, 'e4');
+    await t.tap(find.widgetWithText(FilledButton, 'Finish'));
+    await t.pump();
+    expect(posted.last, {'tutorial_id': 't1', 'step_index': 1, 'completed': true});
   });
 }

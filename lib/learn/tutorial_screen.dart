@@ -2,11 +2,16 @@ import 'package:flutter/material.dart';
 
 import '../board/chess_board.dart';
 import '../bots/bot_picker.dart';
+import '../core/api.dart';
 
 /// Plays through one tutorial's steps: "observe" positions just need Next, "move" positions
 /// require the player to find the right move before advancing. Data comes from GET
 /// /tutorials/{id}'s shape (kind, fen, title, body, answer?, hint?) -- same step format the
 /// website uses, rendered on the app's own board widget.
+///
+/// Progress syncs with the website via GET/POST /tutorials/progress (same table the
+/// website's own lesson player writes to): resumes at the saved step unless the tutorial
+/// was already completed, same as web.
 class TutorialScreen extends StatefulWidget {
   const TutorialScreen({super.key, required this.tutorial});
   final Map<String, dynamic> tutorial;
@@ -18,15 +23,64 @@ class TutorialScreen extends StatefulWidget {
 class _TutorialScreenState extends State<TutorialScreen> {
   late final List<Map<String, dynamic>> _steps = (widget.tutorial['steps'] as List).cast<Map<String, dynamic>>();
   int _i = 0;
+  bool _loaded = false;
   bool _solved = false;
   bool _showHint = false;
   String? _wrongMove;
+  int _lastSavedStep = -1;
 
   Map<String, dynamic> get _step => _steps[_i];
   bool get _isMove => _step['kind'] == 'move';
+  String get _tutorialId => widget.tutorial['id'] as String;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProgress();
+  }
+
+  Future<void> _loadProgress() async {
+    var startAt = 0;
+    try {
+      final progress = (await Api.instance.get('/tutorials/progress') as List).cast<Map<String, dynamic>>();
+      Map<String, dynamic>? existing;
+      for (final p in progress) {
+        if (p['tutorial_id'] == _tutorialId) {
+          existing = p;
+          break;
+        }
+      }
+      if (existing != null && existing['completed'] != true) {
+        startAt = ((existing['step_index'] as num?)?.toInt() ?? 0).clamp(0, _steps.length - 1);
+      }
+    } on ApiError {
+      // Best-effort; starting from the beginning is fine without known progress.
+    }
+    if (!mounted) return;
+    setState(() {
+      _i = startAt;
+      _loaded = true;
+    });
+    _persistStep(_i);
+  }
+
+  void _persistStep(int index) {
+    if (_lastSavedStep == index) return;
+    _lastSavedStep = index;
+    Api.instance.post('/tutorials/progress', {'tutorial_id': _tutorialId, 'step_index': index, 'completed': false}).catchError((_) => null);
+  }
+
+  void _persistComplete() {
+    Api.instance.post('/tutorials/progress', {
+      'tutorial_id': _tutorialId,
+      'step_index': _steps.length - 1,
+      'completed': true,
+    }).catchError((_) => null);
+  }
 
   void _next() {
     if (_i >= _steps.length - 1) {
+      _persistComplete();
       Navigator.of(context).pop();
       return;
     }
@@ -36,6 +90,7 @@ class _TutorialScreenState extends State<TutorialScreen> {
       _showHint = false;
       _wrongMove = null;
     });
+    _persistStep(_i);
   }
 
   bool _onMove(String from, String to, String? promo) {
@@ -55,6 +110,12 @@ class _TutorialScreenState extends State<TutorialScreen> {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
+    if (!_loaded) {
+      return Scaffold(
+        appBar: AppBar(title: Text(widget.tutorial['title'] as String)),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
     final step = _step;
     return Scaffold(
       appBar: AppBar(
