@@ -6,6 +6,7 @@ import '../core/theme.dart';
 import '../core/ui.dart';
 import 'board_vision_screen.dart';
 import 'coordinates_trainer_screen.dart';
+import 'openings_list_screen.dart';
 import 'tutorial_screen.dart';
 import 'video_lesson_screen.dart';
 
@@ -90,6 +91,19 @@ class _LearnScreenState extends State<LearnScreen> {
                 subtitle: 'Spot the hanging piece or the check, 10 seconds each',
                 trailing: Icon(Icons.chevron_right_rounded, color: context.hc.ink3),
                 onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const BoardVisionScreen())),
+              ),
+              HcListRow(
+                leading: Container(
+                  width: HcSize.avatarMd,
+                  height: HcSize.avatarMd,
+                  decoration: BoxDecoration(color: context.hc.greenSoft, borderRadius: BorderRadius.circular(HcRadius.sm)),
+                  alignment: Alignment.center,
+                  child: Icon(Icons.auto_stories_outlined, color: context.hc.green),
+                ),
+                title: 'Opening trainer',
+                subtitle: '15 repertoire lines, move-by-move quizzes',
+                trailing: Icon(Icons.chevron_right_rounded, color: context.hc.ink3),
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const OpeningsListScreen())),
               ),
             ]),
             const SizedBox(height: HcSpace.s4),
