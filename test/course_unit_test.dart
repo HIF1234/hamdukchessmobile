@@ -43,13 +43,18 @@ void main() {
         'rating': 500,
       };
 
-  MockClient client({List<Map<String, dynamic>> progress = const [], Map<String, dynamic>? markResponse}) {
+  MockClient client({
+    List<Map<String, dynamic>> progress = const [],
+    Map<String, dynamic>? markResponse,
+    List<Map<String, dynamic>> certificates = const [],
+  }) {
     return MockClient((request) async {
       final path = request.url.path.replaceFirst('/api/app/v1', '');
       if (path == '/course/progress' && request.method == 'GET') return http.Response(jsonEncode({'progress': progress}), 200);
       if (path == '/course/progress' && request.method == 'POST') {
         return http.Response(jsonEncode(markResponse ?? {'lesson_done': false, 'quiz_passed': true, 'puzzles_done': false, 'bot_beaten': false, 'completed': false}), 200);
       }
+      if (path == '/certificates') return http.Response(jsonEncode({'certificates': certificates}), 200);
       if (path == '/puzzles/pack') {
         return http.Response(jsonEncode({'puzzles': [puzzle('p1'), puzzle('p2')]}), 200);
       }
@@ -137,5 +142,40 @@ void main() {
       await t.pumpAndSettle();
     }
     expect(find.byType(CourseUnitScreen), findsOneWidget);
+  });
+
+  testWidgets('finishing the last part offers the newly earned certificate', (t) async {
+    Api.client = client(
+      markResponse: {
+        'lesson_done': true,
+        'quiz_passed': true,
+        'puzzles_done': true,
+        'bot_beaten': true,
+        'completed': true,
+        'certificateId': 'cert-1',
+      },
+      certificates: [
+        {'id': 'cert-1', 'unit_id': 'pawn', 'piece_name': 'Pawn', 'unit_title': 'The Board & Setup', 'player_name': 'tester', 'issued_at': '2026-01-01T00:00:00Z'},
+      ],
+    );
+    await t.pumpWidget(MaterialApp(home: CourseUnitScreen(unit: unitWithQuiz())));
+    await t.pumpAndSettle();
+    await t.tap(find.text('Quiz'));
+    await t.pumpAndSettle();
+    await t.tap(find.text('64'));
+    await t.pump();
+    await t.tap(find.text('Next'));
+    await t.pump();
+    await t.tap(find.text('White'));
+    await t.pump();
+    await t.tap(find.text('Finish'));
+    await t.pump();
+    await t.tap(find.text('Continue'));
+    await t.pumpAndSettle();
+    expect(find.text("You've earned a certificate for this level."), findsOneWidget);
+    expect(find.text('View certificate'), findsOneWidget);
+    await t.tap(find.text('Later'));
+    await t.pumpAndSettle();
+    expect(find.text("You've earned a certificate for this level."), findsNothing);
   });
 }

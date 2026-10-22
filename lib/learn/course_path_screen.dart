@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../core/api.dart';
 import '../core/hc_widgets.dart';
 import '../core/theme.dart';
+import 'certificates_screen.dart';
 import 'course_unit_screen.dart';
 
 /// "A full course from first move to club player": six levels named after the pieces, Pawn
@@ -55,7 +56,13 @@ class _CoursePathScreenState extends State<CoursePathScreen> {
     final hc = context.hc;
     final units = _units;
     return Scaffold(
-      appBar: AppBar(title: const Text('Course path')),
+      appBar: AppBar(title: const Text('Course path'), actions: [
+        IconButton(
+          icon: const Icon(Icons.workspace_premium_outlined),
+          tooltip: 'My certificates',
+          onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CertificatesScreen())),
+        ),
+      ]),
       body: units == null
           ? Center(
               child: _error != null

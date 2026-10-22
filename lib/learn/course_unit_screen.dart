@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:printing/printing.dart';
 
 import '../board/chess_board.dart';
 import '../bots/bot_game_screen.dart';
@@ -9,6 +10,7 @@ import '../core/app_config.dart';
 import '../core/hc_widgets.dart';
 import '../core/theme.dart';
 import '../puzzles/puzzle_session.dart';
+import 'certificate_pdf.dart';
 import 'tutorial_screen.dart';
 
 /// One course-path unit: lesson, practice puzzles, a short quiz, and a bot to beat. Each
@@ -58,9 +60,44 @@ class _CourseUnitScreenState extends State<CourseUnitScreen> {
   Future<void> _markStep(String step) async {
     try {
       final r = await Api.instance.post('/course/progress', {'unitId': _unitId, 'step': step}) as Map;
-      if (mounted) setState(() => _progress = r.cast<String, dynamic>());
+      if (!mounted) return;
+      setState(() => _progress = r.cast<String, dynamic>());
+      final certificateId = r['certificateId'] as String?;
+      if (certificateId != null) await _offerCertificate(certificateId);
     } on ApiError {
       // Best-effort; the local checklist still reflects what just happened.
+    }
+  }
+
+  Future<void> _offerCertificate(String certificateId) async {
+    Map<String, dynamic>? certificate;
+    try {
+      final r = await Api.instance.get('/certificates') as Map;
+      final list = (r['certificates'] as List).cast<Map<String, dynamic>>();
+      for (final c in list) {
+        if (c['id'] == certificateId) {
+          certificate = c;
+          break;
+        }
+      }
+    } on ApiError {
+      // Best-effort; the completion itself still shows without a certificate prompt.
+    }
+    if (certificate == null || !mounted) return;
+    final view = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Level complete!'),
+        content: const Text("You've earned a certificate for this level."),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Later')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('View certificate')),
+        ],
+      ),
+    );
+    if (view == true) {
+      final doc = await buildCertificatePdf(certificate);
+      await Printing.layoutPdf(onLayout: (format) => doc.save(), name: '${certificate['piece_name']} certificate.pdf');
     }
   }
 
