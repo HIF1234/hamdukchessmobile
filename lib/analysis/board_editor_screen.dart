@@ -2,14 +2,10 @@ import 'package:chess/chess.dart' as ch;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../core/fen.dart';
 import '../core/hc_widgets.dart';
 import '../core/theme.dart';
 import 'analysis_screen.dart';
-
-const _glyph = {
-  'K': '♔', 'Q': '♕', 'R': '♖', 'B': '♗', 'N': '♘', 'P': '♙',
-  'k': '♚', 'q': '♛', 'r': '♜', 'b': '♝', 'n': '♞', 'p': '♟',
-};
 
 /// Set up any position: tap a piece from the palette, then a square to place it (or the
 /// eraser, then a square to clear it). Side to move, castling rights, a legality check and
@@ -22,29 +18,11 @@ class BoardEditorScreen extends StatefulWidget {
 }
 
 class _BoardEditorScreenState extends State<BoardEditorScreen> {
-  Map<String, String> _placement = _placementFromFen(standardStartFen);
+  Map<String, String> _placement = placementFromFen(standardStartFen);
   String? _holding = 'K'; // currently selected palette piece; null = eraser
   bool _whiteToMove = true;
   final Set<String> _castling = {'K', 'Q', 'k', 'q'};
   String? _message;
-
-  static Map<String, String> _placementFromFen(String fen) {
-    final map = <String, String>{};
-    final rows = fen.split(' ').first.split('/');
-    for (var r = 0; r < 8; r++) {
-      var f = 0;
-      for (final ch in rows[r].split('')) {
-        final n = int.tryParse(ch);
-        if (n != null) {
-          f += n;
-        } else {
-          map['${"abcdefgh"[f]}${8 - r}'] = ch;
-          f++;
-        }
-      }
-    }
-    return map;
-  }
 
   String get _fen {
     final rows = <String>[];
@@ -129,7 +107,7 @@ class _BoardEditorScreenState extends State<BoardEditorScreen> {
                     child: Container(
                       color: light ? hc.surface2 : hc.surface3,
                       alignment: Alignment.center,
-                      child: Text(piece != null ? _glyph[piece] ?? '' : '', style: const TextStyle(fontSize: 26)),
+                      child: Text(piece != null ? pieceGlyph[piece] ?? '' : '', style: const TextStyle(fontSize: 26)),
                     ),
                   );
                 },
@@ -165,7 +143,7 @@ class _BoardEditorScreenState extends State<BoardEditorScreen> {
             ]),
             const SizedBox(height: HcSpace.s3),
             Wrap(spacing: 8, runSpacing: 8, children: [
-              OutlinedButton(onPressed: () => setState(() => _placement = _placementFromFen(standardStartFen)), child: const Text('Starting position')),
+              OutlinedButton(onPressed: () => setState(() => _placement = placementFromFen(standardStartFen)), child: const Text('Starting position')),
               OutlinedButton(onPressed: () => setState(() => _placement = {}), child: const Text('Clear board')),
               OutlinedButton(onPressed: _checkLegality, child: const Text('Check legality')),
               OutlinedButton.icon(onPressed: _copyFen, icon: const Icon(Icons.copy_rounded, size: 16), label: const Text('Copy FEN')),
@@ -195,6 +173,6 @@ class _PaletteButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChoiceChip(label: Text(_glyph[piece] ?? piece, style: const TextStyle(fontSize: 18)), selected: selected, onSelected: (_) => onTap());
+    return ChoiceChip(label: Text(pieceGlyph[piece] ?? piece, style: const TextStyle(fontSize: 18)), selected: selected, onSelected: (_) => onTap());
   }
 }

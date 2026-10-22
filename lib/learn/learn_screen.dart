@@ -4,6 +4,7 @@ import '../core/api.dart';
 import '../core/hc_widgets.dart';
 import '../core/theme.dart';
 import '../core/ui.dart';
+import 'board_vision_screen.dart';
 import 'coordinates_trainer_screen.dart';
 import 'tutorial_screen.dart';
 import 'video_lesson_screen.dart';
@@ -76,6 +77,19 @@ class _LearnScreenState extends State<LearnScreen> {
                 subtitle: 'Tap the named square, 30-second rounds',
                 trailing: Icon(Icons.chevron_right_rounded, color: context.hc.ink3),
                 onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CoordinatesTrainerScreen())),
+              ),
+              HcListRow(
+                leading: Container(
+                  width: HcSize.avatarMd,
+                  height: HcSize.avatarMd,
+                  decoration: BoxDecoration(color: context.hc.greenSoft, borderRadius: BorderRadius.circular(HcRadius.sm)),
+                  alignment: Alignment.center,
+                  child: Icon(Icons.visibility_outlined, color: context.hc.green),
+                ),
+                title: 'Board vision',
+                subtitle: 'Spot the hanging piece or the check, 10 seconds each',
+                trailing: Icon(Icons.chevron_right_rounded, color: context.hc.ink3),
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const BoardVisionScreen())),
               ),
             ]),
             const SizedBox(height: HcSpace.s4),
