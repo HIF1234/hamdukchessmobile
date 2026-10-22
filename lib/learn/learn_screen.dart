@@ -6,6 +6,7 @@ import '../core/theme.dart';
 import '../core/ui.dart';
 import 'board_vision_screen.dart';
 import 'coordinates_trainer_screen.dart';
+import 'course_path_screen.dart';
 import 'endgames_list_screen.dart';
 import 'openings_list_screen.dart';
 import 'tutorial_screen.dart';
@@ -64,6 +65,22 @@ class _LearnScreenState extends State<LearnScreen> {
           padding: const EdgeInsets.all(16),
           children: [
             if (_error != null) Padding(padding: const EdgeInsets.only(bottom: 12), child: Text(_error!)),
+            HcListGroup(children: [
+              HcListRow(
+                leading: Container(
+                  width: HcSize.avatarMd,
+                  height: HcSize.avatarMd,
+                  decoration: BoxDecoration(color: context.hc.greenSoft, borderRadius: BorderRadius.circular(HcRadius.sm)),
+                  alignment: Alignment.center,
+                  child: Icon(Icons.route_outlined, color: context.hc.green),
+                ),
+                title: 'Course path',
+                subtitle: 'Six levels, Pawn to King',
+                trailing: Icon(Icons.chevron_right_rounded, color: context.hc.ink3),
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CoursePathScreen())),
+              ),
+            ]),
+            const SizedBox(height: HcSpace.s4),
             const SectionLabel('Drills', icon: Icons.bolt_outlined),
             const SizedBox(height: 10),
             HcListGroup(children: [
