@@ -4,6 +4,7 @@ import '../core/api.dart';
 import '../core/hc_widgets.dart';
 import '../core/theme.dart';
 import '../core/ui.dart';
+import 'coordinates_trainer_screen.dart';
 import 'tutorial_screen.dart';
 import 'video_lesson_screen.dart';
 
@@ -60,6 +61,24 @@ class _LearnScreenState extends State<LearnScreen> {
           padding: const EdgeInsets.all(16),
           children: [
             if (_error != null) Padding(padding: const EdgeInsets.only(bottom: 12), child: Text(_error!)),
+            const SectionLabel('Drills', icon: Icons.bolt_outlined),
+            const SizedBox(height: 10),
+            HcListGroup(children: [
+              HcListRow(
+                leading: Container(
+                  width: HcSize.avatarMd,
+                  height: HcSize.avatarMd,
+                  decoration: BoxDecoration(color: context.hc.greenSoft, borderRadius: BorderRadius.circular(HcRadius.sm)),
+                  alignment: Alignment.center,
+                  child: Icon(Icons.grid_on_rounded, color: context.hc.green),
+                ),
+                title: 'Coordinates trainer',
+                subtitle: 'Tap the named square, 30-second rounds',
+                trailing: Icon(Icons.chevron_right_rounded, color: context.hc.ink3),
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CoordinatesTrainerScreen())),
+              ),
+            ]),
+            const SizedBox(height: HcSpace.s4),
             if (tutorials == null && videos == null && _error == null)
               const Padding(padding: EdgeInsets.symmetric(vertical: 48), child: Center(child: CircularProgressIndicator())),
             if (tutorials != null) ...[
